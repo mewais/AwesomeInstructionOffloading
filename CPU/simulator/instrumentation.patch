@@ -1,0 +1,790 @@
+diff --git a/src/cache.cpp b/src/cache.cpp
+index 315e6bf..f713666 100644
+--- a/src/cache.cpp
++++ b/src/cache.cpp
+@@ -66,7 +66,15 @@ uint64_t Cache::access(MemReq& req) {
+         int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement);
+         respCycle += accLat;
+ 
++        if (perInstructionStats.find(req.pc) == perInstructionStats.end())
++            perInstructionStats[req.pc][name] = std::make_pair(0, 0);
++        if (perInstructionStats[req.pc].find(name) == perInstructionStats[req.pc].end())
++            perInstructionStats[req.pc][name] = std::make_pair(0, 0);
++        if (req.pc)
++            perInstructionStats[req.pc][name].first++;
+         if (lineId == -1 && cc->shouldAllocate(req)) {
++            if (req.pc)
++                perInstructionStats[req.pc][name].second++;
+             //Make space for new line
+             Address wbLineAddr;
+             lineId = array->preinsert(req.lineAddr, &req, &wbLineAddr); //find the lineId to replace
+diff --git a/src/coherence_ctrls.cpp b/src/coherence_ctrls.cpp
+index 426f80a..564edbd 100644
+--- a/src/coherence_ctrls.cpp
++++ b/src/coherence_ctrls.cpp
+@@ -67,13 +67,13 @@ uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool
+         case S:
+         case E:
+             {
+-                MemReq req = {wbLineAddr, PUTS, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
++                MemReq req = {0, wbLineAddr, PUTS, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
+                 respCycle = parents[getParentId(wbLineAddr)]->access(req);
+             }
+             break;
+         case M:
+             {
+-                MemReq req = {wbLineAddr, PUTX, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
++                MemReq req = {0, wbLineAddr, PUTX, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
+                 respCycle = parents[getParentId(wbLineAddr)]->access(req);
+             }
+             break;
+@@ -84,7 +84,7 @@ uint64_t MESIBottomCC::processEviction(Address wbLineAddr, uint32_t lineId, bool
+     return respCycle;
+ }
+ 
+-uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags) {
++uint64_t MESIBottomCC::processAccess(Address pc, Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags) {
+     uint64_t respCycle = cycle;
+     MESIState* state = &array[lineId];
+     switch (type) {
+@@ -104,7 +104,7 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
+         case GETS:
+             if (*state == I) {
+                 uint32_t parentId = getParentId(lineAddr);
+-                MemReq req = {lineAddr, GETS, selfId, state, cycle, &ccLock, *state, srcId, flags};
++                MemReq req = {pc, lineAddr, GETS, selfId, state, cycle, &ccLock, *state, srcId, flags};
+                 uint32_t nextLevelLat = parents[parentId]->access(req) - cycle;
+                 uint32_t netLat = parentRTTs[parentId];
+                 profGETNextLevelLat.inc(nextLevelLat);
+@@ -122,7 +122,7 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
+                 if (*state == I) profGETXMissIM.inc();
+                 else profGETXMissSM.inc();
+                 uint32_t parentId = getParentId(lineAddr);
+-                MemReq req = {lineAddr, GETX, selfId, state, cycle, &ccLock, *state, srcId, flags};
++                MemReq req = {pc, lineAddr, GETX, selfId, state, cycle, &ccLock, *state, srcId, flags};
+                 uint32_t nextLevelLat = parents[parentId]->access(req) - cycle;
+                 uint32_t netLat = parentRTTs[parentId];
+                 profGETNextLevelLat.inc(nextLevelLat);
+@@ -186,11 +186,11 @@ void MESIBottomCC::processInval(Address lineAddr, uint32_t lineId, InvType type,
+ }
+ 
+ 
+-uint64_t MESIBottomCC::processNonInclusiveWriteback(Address lineAddr, AccessType type, uint64_t cycle, MESIState* state, uint32_t srcId, uint32_t flags) {
++uint64_t MESIBottomCC::processNonInclusiveWriteback(Address pc, Address lineAddr, AccessType type, uint64_t cycle, MESIState* state, uint32_t srcId, uint32_t flags) {
+     if (!nonInclusiveHack) panic("Non-inclusive %s on line 0x%lx, this cache should be inclusive", AccessTypeName(type), lineAddr);
+ 
+     //info("Non-inclusive wback, forwarding");
+-    MemReq req = {lineAddr, type, selfId, state, cycle, &ccLock, *state, srcId, flags | MemReq::NONINCLWB};
++    MemReq req = {pc, lineAddr, type, selfId, state, cycle, &ccLock, *state, srcId, flags | MemReq::NONINCLWB};
+     uint64_t respCycle = parents[getParentId(lineAddr)]->access(req);
+     return respCycle;
+ }
+diff --git a/src/coherence_ctrls.h b/src/coherence_ctrls.h
+index 2d2a1d0..42e8274 100644
+--- a/src/coherence_ctrls.h
++++ b/src/coherence_ctrls.h
+@@ -146,13 +146,13 @@ class MESIBottomCC : public GlobAlloc {
+ 
+         uint64_t processEviction(Address wbLineAddr, uint32_t lineId, bool lowerLevelWriteback, uint64_t cycle, uint32_t srcId);
+ 
+-        uint64_t processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags);
++        uint64_t processAccess(Address pc, Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags);
+ 
+         void processWritebackOnAccess(Address lineAddr, uint32_t lineId, AccessType type);
+ 
+         void processInval(Address lineAddr, uint32_t lineId, InvType type, bool* reqWriteback);
+ 
+-        uint64_t processNonInclusiveWriteback(Address lineAddr, AccessType type, uint64_t cycle, MESIState* state, uint32_t srcId, uint32_t flags);
++        uint64_t processNonInclusiveWriteback(Address pc, Address lineAddr, AccessType type, uint64_t cycle, MESIState* state, uint32_t srcId, uint32_t flags);
+ 
+         inline void lock() {
+             futex_lock(&ccLock);
+@@ -354,7 +354,7 @@ class MESICC : public CC {
+             if (lineId == -1 || (((req.type == PUTS) || (req.type == PUTX)) && !bcc->isValid(lineId))) { //can only be a non-inclusive wback
+                 assert(nonInclusiveHack);
+                 assert((req.type == PUTS) || (req.type == PUTX));
+-                respCycle = bcc->processNonInclusiveWriteback(req.lineAddr, req.type, startCycle, req.state, req.srcId, req.flags);
++                respCycle = bcc->processNonInclusiveWriteback(req.pc, req.lineAddr, req.type, startCycle, req.state, req.srcId, req.flags);
+             } else {
+                 //Prefetches are side requests and get handled a bit differently
+                 bool isPrefetch = req.flags & MemReq::PREFETCH;
+@@ -362,7 +362,7 @@ class MESICC : public CC {
+                 uint32_t flags = req.flags & ~MemReq::PREFETCH; //always clear PREFETCH, this flag cannot propagate up
+ 
+                 //if needed, fetch line or upgrade miss from upper level
+-                respCycle = bcc->processAccess(req.lineAddr, lineId, req.type, startCycle, req.srcId, flags);
++                respCycle = bcc->processAccess(req.pc, req.lineAddr, lineId, req.type, startCycle, req.srcId, flags);
+                 if (getDoneCycle) *getDoneCycle = respCycle;
+                 if (!isPrefetch) { //prefetches only touch bcc; the demand request from the core will pull the line to lower level
+                     //At this point, the line is in a good state w.r.t. upper levels
+@@ -466,7 +466,7 @@ class MESITerminalCC : public CC {
+             assert(lineId != -1);
+             assert(!getDoneCycle);
+             //if needed, fetch line or upgrade miss from upper level
+-            uint64_t respCycle = bcc->processAccess(req.lineAddr, lineId, req.type, startCycle, req.srcId, req.flags);
++            uint64_t respCycle = bcc->processAccess(req.pc, req.lineAddr, lineId, req.type, startCycle, req.srcId, req.flags);
+             //at this point, the line is in a good state w.r.t. upper levels
+             return respCycle;
+         }
+diff --git a/src/core.h b/src/core.h
+index 28f8f5c..616d22e 100644
+--- a/src/core.h
++++ b/src/core.h
+@@ -41,13 +41,13 @@ struct BblInfo {
+  * As an artifact of having a shared code cache, we need these to be the same for different core types.
+  */
+ struct InstrFuncPtrs {  // NOLINT(whitespace)
+-    void (*loadPtr)(THREADID, ADDRINT);
+-    void (*storePtr)(THREADID, ADDRINT);
++    void (*loadPtr)(THREADID, ADDRINT, ADDRINT);
++    void (*storePtr)(THREADID, ADDRINT, ADDRINT);
+     void (*bblPtr)(THREADID, ADDRINT, BblInfo*);
+     void (*branchPtr)(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT);
+     // Same as load/store functions, but last arg indicated whether op is executing
+-    void (*predLoadPtr)(THREADID, ADDRINT, BOOL);
+-    void (*predStorePtr)(THREADID, ADDRINT, BOOL);
++    void (*predLoadPtr)(THREADID, ADDRINT, ADDRINT, BOOL);
++    void (*predStorePtr)(THREADID, ADDRINT, ADDRINT, BOOL);
+     uint64_t type;
+     uint64_t pad[1];
+     //NOTE: By having the struct be a power of 2 bytes, indirect calls are simpler (w/ gcc 4.4 -O3, 6->5 instructions, and those instructions are simpler)
+diff --git a/src/filter_cache.h b/src/filter_cache.h
+index 9d1fb5e..5281abf 100644
+--- a/src/filter_cache.h
++++ b/src/filter_cache.h
+@@ -99,7 +99,7 @@ class FilterCache : public Cache {
+             parentStat->append(cacheStat);
+         }
+ 
+-        inline uint64_t load(Address vAddr, uint64_t curCycle) {
++        inline uint64_t load(Address pc, Address vAddr, uint64_t curCycle) {
+             Address vLineAddr = vAddr >> lineBits;
+             uint32_t idx = vLineAddr & setMask;
+             uint64_t availCycle = filterArray[idx].availCycle; //read before, careful with ordering to avoid timing races
+@@ -107,11 +107,11 @@ class FilterCache : public Cache {
+                 fGETSHit++;
+                 return MAX(curCycle, availCycle);
+             } else {
+-                return replace(vLineAddr, idx, true, curCycle);
++                return replace(pc, vLineAddr, idx, true, curCycle);
+             }
+         }
+ 
+-        inline uint64_t store(Address vAddr, uint64_t curCycle) {
++        inline uint64_t store(Address pc, Address vAddr, uint64_t curCycle) {
+             Address vLineAddr = vAddr >> lineBits;
+             uint32_t idx = vLineAddr & setMask;
+             uint64_t availCycle = filterArray[idx].availCycle; //read before, careful with ordering to avoid timing races
+@@ -121,15 +121,15 @@ class FilterCache : public Cache {
+                 //filterArray[idx].availCycle = curCycle; //do optimistic store-load forwarding
+                 return MAX(curCycle, availCycle);
+             } else {
+-                return replace(vLineAddr, idx, false, curCycle);
++                return replace(pc, vLineAddr, idx, false, curCycle);
+             }
+         }
+ 
+-        uint64_t replace(Address vLineAddr, uint32_t idx, bool isLoad, uint64_t curCycle) {
++        uint64_t replace(Address pc, Address vLineAddr, uint32_t idx, bool isLoad, uint64_t curCycle) {
+             Address pLineAddr = procMask | vLineAddr;
+             MESIState dummyState = MESIState::I;
+             futex_lock(&filterLock);
+-            MemReq req = {pLineAddr, isLoad? GETS : GETX, 0, &dummyState, curCycle, &filterLock, dummyState, srcId, reqFlags};
++            MemReq req = {pc, pLineAddr, isLoad? GETS : GETX, 0, &dummyState, curCycle, &filterLock, dummyState, srcId, reqFlags};
+             uint64_t respCycle  = access(req);
+ 
+             //Due to the way we do the locking, at this point the old address might be invalidated, but we have the new address guaranteed until we release the lock
+diff --git a/src/memory_hierarchy.h b/src/memory_hierarchy.h
+index a399bf6..0383749 100644
+--- a/src/memory_hierarchy.h
++++ b/src/memory_hierarchy.h
+@@ -76,6 +76,7 @@ inline bool IsPut(AccessType t) { return t == PUTS || t == PUTX; }
+ 
+ /* Memory request */
+ struct MemReq {
++    Address pc;
+     Address lineAddr;
+     AccessType type;
+     uint32_t childId;
+diff --git a/src/null_core.cpp b/src/null_core.cpp
+index 06d83c4..f38de33 100644
+--- a/src/null_core.cpp
++++ b/src/null_core.cpp
+@@ -62,10 +62,10 @@ InstrFuncPtrs NullCore::GetFuncPtrs() {
+     return {LoadFunc, StoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, FPTR_ANALYSIS, {0}};
+ }
+ 
+-void NullCore::LoadFunc(THREADID tid, ADDRINT addr) {}
+-void NullCore::StoreFunc(THREADID tid, ADDRINT addr) {}
+-void NullCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {}
+-void NullCore::PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred) {}
++void NullCore::LoadFunc(THREADID tid, ADDRINT pc, ADDRINT addr) {}
++void NullCore::StoreFunc(THREADID tid, ADDRINT pc, ADDRINT addr) {}
++void NullCore::PredLoadFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred) {}
++void NullCore::PredStoreFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred) {}
+ 
+ void NullCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+     NullCore* core = static_cast<NullCore*>(cores[tid]);
+diff --git a/src/null_core.h b/src/null_core.h
+index 83619e7..15fdf24 100644
+--- a/src/null_core.h
++++ b/src/null_core.h
+@@ -53,11 +53,11 @@ class NullCore : public Core {
+     protected:
+         inline void bbl(BblInfo* bblInstrs);
+ 
+-        static void LoadFunc(THREADID tid, ADDRINT addr);
+-        static void StoreFunc(THREADID tid, ADDRINT addr);
++        static void LoadFunc(THREADID tid, ADDRINT pc, ADDRINT addr);
++        static void StoreFunc(THREADID tid, ADDRINT pc, ADDRINT addr);
+         static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
+-        static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred);
+-        static void PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred);
++        static void PredLoadFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred);
++        static void PredStoreFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred);
+ 
+         static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
+ } ATTR_LINE_ALIGNED; //This needs to take up a whole cache line, or false sharing will be extremely frequent
+diff --git a/src/ooo_core.cpp b/src/ooo_core.cpp
+index 4a2305e..4946718 100644
+--- a/src/ooo_core.cpp
++++ b/src/ooo_core.cpp
+@@ -133,11 +133,13 @@ void OOOCore::contextSwitch(int32_t gid) {
+ 
+ InstrFuncPtrs OOOCore::GetFuncPtrs() {return {LoadFunc, StoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, FPTR_ANALYSIS, {0}};}
+ 
+-inline void OOOCore::load(Address addr) {
++inline void OOOCore::load(Address pc, Address addr) {
++    loadPCs[loads] = pc;
+     loadAddrs[loads++] = addr;
+ }
+ 
+-void OOOCore::store(Address addr) {
++void OOOCore::store(Address pc, Address addr) {
++    storePCs[stores] = pc;
+     storeAddrs[stores++] = addr;
+ }
+ 
+@@ -145,6 +147,7 @@ void OOOCore::store(Address addr) {
+ // Predication is rare enough that we don't need to model it perfectly to be accurate (i.e. the uops still execute, retire, etc), but this is needed for correctness.
+ void OOOCore::predFalseMemOp() {
+     // I'm going to go out on a limb and assume just loads are predicated (this will not fail silently if it's a store)
++    loadPCs[loads] = -1L;
+     loadAddrs[loads++] = -1L;
+ }
+ 
+@@ -265,10 +268,11 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+                     // Wait for all previous store addresses to be resolved
+                     dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
+ 
++                    Address pc = loadPCs[loadIdx];
+                     Address addr = loadAddrs[loadIdx++];
+                     uint64_t reqSatisfiedCycle = dispatchCycle;
+                     if (addr != ((Address)-1L)) {
+-                        reqSatisfiedCycle = l1d->load(addr, dispatchCycle) + L1D_LAT;
++                        reqSatisfiedCycle = l1d->load(pc, addr, dispatchCycle) + L1D_LAT;
+                         cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
+                     }
+ 
+@@ -304,8 +308,9 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+                     // Wait for all previous store addresses to be resolved (not just ours :))
+                     dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
+ 
++                    Address pc = storePCs[storeIdx];
+                     Address addr = storeAddrs[storeIdx++];
+-                    uint64_t reqSatisfiedCycle = l1d->store(addr, dispatchCycle) + L1D_LAT;
++                    uint64_t reqSatisfiedCycle = l1d->store(pc, addr, dispatchCycle) + L1D_LAT;
+                     cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
+ 
+                     // Fill the forwarding table
+@@ -404,7 +409,7 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+         Address wrongPathAddr = branchTaken? branchNotTakenNpc : branchTakenNpc;
+         uint64_t reqCycle = fetchCycle;
+         for (uint32_t i = 0; i < 5*64/lineSize; i++) {
+-            uint64_t fetchLat = l1i->load(wrongPathAddr + lineSize*i, curCycle) - curCycle;
++            uint64_t fetchLat = l1i->load(0, wrongPathAddr + lineSize*i, curCycle) - curCycle;
+             cRec.record(curCycle, curCycle, curCycle + fetchLat);
+             uint64_t respCycle = reqCycle + fetchLat;
+             if (respCycle > lastCommitCycle) {
+@@ -425,7 +430,7 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+         // Do not model fetch throughput limit here, decoder-generated stalls already include it
+         // We always call fetches with curCycle to avoid upsetting the weave
+         // models (but we could move to a fetch-centric recorder to avoid this)
+-        uint64_t fetchLat = l1i->load(fetchAddr, curCycle) - curCycle;
++        uint64_t fetchLat = l1i->load(0, fetchAddr, curCycle) - curCycle;
+         cRec.record(curCycle, curCycle, curCycle + fetchLat);
+         fetchCycle += fetchLat;
+     }
+@@ -484,18 +489,18 @@ void OOOCore::advance(uint64_t targetCycle) {
+ 
+ // Pin interface code
+ 
+-void OOOCore::LoadFunc(THREADID tid, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->load(addr);}
+-void OOOCore::StoreFunc(THREADID tid, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->store(addr);}
++void OOOCore::LoadFunc(THREADID tid, ADDRINT pc, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->load(pc, addr);}
++void OOOCore::StoreFunc(THREADID tid, ADDRINT pc, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->store(pc, addr);}
+ 
+-void OOOCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {
++void OOOCore::PredLoadFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred) {
+     OOOCore* core = static_cast<OOOCore*>(cores[tid]);
+-    if (pred) core->load(addr);
++    if (pred) core->load(pc, addr);
+     else core->predFalseMemOp();
+ }
+ 
+-void OOOCore::PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred) {
++void OOOCore::PredStoreFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred) {
+     OOOCore* core = static_cast<OOOCore*>(cores[tid]);
+-    if (pred) core->store(addr);
++    if (pred) core->store(pc, addr);
+     else core->predFalseMemOp();
+ }
+ 
+diff --git a/src/ooo_core.h b/src/ooo_core.h
+index 9a59b81..e2f0aa5 100644
+--- a/src/ooo_core.h
++++ b/src/ooo_core.h
+@@ -372,7 +372,9 @@ class OOOCore : public Core {
+ 
+         //Record load and store addresses
+         Address loadAddrs[256];
++        Address loadPCs[256];
+         Address storeAddrs[256];
++        Address storePCs[256];
+         uint32_t loads;
+         uint32_t stores;
+ 
+@@ -455,8 +457,8 @@ class OOOCore : public Core {
+         void cSimEnd();
+ 
+     private:
+-        inline void load(Address addr);
+-        inline void store(Address addr);
++        inline void load(Address pc, Address addr);
++        inline void store(Address pc, Address addr);
+ 
+         /* NOTE: Analysis routines cannot touch curCycle directly, must use
+          * advance() for long jumps or insWindow.advancePos() for 1-cycle
+@@ -476,10 +478,10 @@ class OOOCore : public Core {
+ 
+         inline void bbl(Address bblAddr, BblInfo* bblInfo);
+ 
+-        static void LoadFunc(THREADID tid, ADDRINT addr);
+-        static void StoreFunc(THREADID tid, ADDRINT addr);
+-        static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred);
+-        static void PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred);
++        static void LoadFunc(THREADID tid, ADDRINT pc, ADDRINT addr);
++        static void StoreFunc(THREADID tid, ADDRINT pc, ADDRINT addr);
++        static void PredLoadFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred);
++        static void PredStoreFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred);
+         static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
+         static void BranchFunc(THREADID tid, ADDRINT pc, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc);
+ } ATTR_LINE_ALIGNED;  // Take up an int number of cache lines
+diff --git a/src/prefetcher.cpp b/src/prefetcher.cpp
+index b440c4c..1d7e791 100644
+--- a/src/prefetcher.cpp
++++ b/src/prefetcher.cpp
+@@ -138,7 +138,7 @@ uint64_t StreamPrefetcher::access(MemReq& req) {
+ 
+                 if (prefetchPos < 64 && !e.valid[prefetchPos]) {
+                     MESIState state = I;
+-                    MemReq pfReq = {req.lineAddr + prefetchPos - pos, GETS, req.childId, &state, reqCycle, req.childLock, state, req.srcId, MemReq::PREFETCH};
++                    MemReq pfReq = {0, req.lineAddr + prefetchPos - pos, GETS, req.childId, &state, reqCycle, req.childLock, state, req.srcId, MemReq::PREFETCH};
+                     uint64_t pfRespCycle = parent->access(pfReq);  // FIXME, might segfault
+                     e.valid[prefetchPos] = true;
+                     e.times[prefetchPos].fill(reqCycle, pfRespCycle);
+diff --git a/src/simple_core.cpp b/src/simple_core.cpp
+index 5102faa..5c37a91 100644
+--- a/src/simple_core.cpp
++++ b/src/simple_core.cpp
+@@ -47,12 +47,12 @@ uint64_t SimpleCore::getPhaseCycles() const {
+     return curCycle % zinfo->phaseLength;
+ }
+ 
+-void SimpleCore::load(Address addr) {
+-    curCycle = l1d->load(addr, curCycle);
++void SimpleCore::load(Address pc, Address addr) {
++    curCycle = l1d->load(pc, addr, curCycle);
+ }
+ 
+-void SimpleCore::store(Address addr) {
+-    curCycle = l1d->store(addr, curCycle);
++void SimpleCore::store(Address pc, Address addr) {
++    curCycle = l1d->store(pc, addr, curCycle);
+ }
+ 
+ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+@@ -63,7 +63,7 @@ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+ 
+     Address endBblAddr = bblAddr + bblInfo->bytes;
+     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
+-        curCycle = l1i->load(fetchAddr, curCycle);
++        curCycle = l1i->load(0, fetchAddr, curCycle);
+     }
+ }
+ 
+@@ -92,20 +92,20 @@ InstrFuncPtrs SimpleCore::GetFuncPtrs() {
+     return {LoadFunc, StoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, FPTR_ANALYSIS, {0}};
+ }
+ 
+-void SimpleCore::LoadFunc(THREADID tid, ADDRINT addr) {
+-    static_cast<SimpleCore*>(cores[tid])->load(addr);
++void SimpleCore::LoadFunc(THREADID tid, ADDRINT pc, ADDRINT addr) {
++    static_cast<SimpleCore*>(cores[tid])->load(pc, addr);
+ }
+ 
+-void SimpleCore::StoreFunc(THREADID tid, ADDRINT addr) {
+-    static_cast<SimpleCore*>(cores[tid])->store(addr);
++void SimpleCore::StoreFunc(THREADID tid, ADDRINT pc, ADDRINT addr) {
++    static_cast<SimpleCore*>(cores[tid])->store(pc, addr);
+ }
+ 
+-void SimpleCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+-    if (pred) static_cast<SimpleCore*>(cores[tid])->load(addr);
++void SimpleCore::PredLoadFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred) {
++    if (pred) static_cast<SimpleCore*>(cores[tid])->load(pc, addr);
+ }
+ 
+-void SimpleCore::PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+-    if (pred) static_cast<SimpleCore*>(cores[tid])->store(addr);
++void SimpleCore::PredStoreFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred) {
++    if (pred) static_cast<SimpleCore*>(cores[tid])->store(pc, addr);
+ }
+ 
+ void SimpleCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+diff --git a/src/simple_core.h b/src/simple_core.h
+index 8a3a143..8299793 100644
+--- a/src/simple_core.h
++++ b/src/simple_core.h
+@@ -59,15 +59,15 @@ class SimpleCore : public Core {
+ 
+     protected:
+         //Simulation functions
+-        inline void load(Address addr);
+-        inline void store(Address addr);
++        inline void load(Address pc, Address addr);
++        inline void store(Address pc, Address addr);
+         inline void bbl(Address bblAddr, BblInfo* bblInstrs);
+ 
+-        static void LoadFunc(THREADID tid, ADDRINT addr);
+-        static void StoreFunc(THREADID tid, ADDRINT addr);
++        static void LoadFunc(THREADID tid, ADDRINT pc, ADDRINT addr);
++        static void StoreFunc(THREADID tid, ADDRINT pc, ADDRINT addr);
+         static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
+-        static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred);
+-        static void PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred);
++        static void PredLoadFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred);
++        static void PredStoreFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred);
+ 
+         static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
+ }  ATTR_LINE_ALIGNED; //This needs to take up a whole cache line, or false sharing will be extremely frequent
+diff --git a/src/timing_cache.cpp b/src/timing_cache.cpp
+index be43a28..e6fb432 100644
+--- a/src/timing_cache.cpp
++++ b/src/timing_cache.cpp
+@@ -127,7 +127,15 @@ uint64_t TimingCache::access(MemReq& req) {
+         int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement);
+         respCycle += accLat;
+ 
++        if (perInstructionStats.find(req.pc) == perInstructionStats.end())
++            perInstructionStats[req.pc][name] = std::make_pair(0, 0);
++        if (perInstructionStats[req.pc].find(name) == perInstructionStats[req.pc].end())
++            perInstructionStats[req.pc][name] = std::make_pair(0, 0);
++        if (req.pc)
++            perInstructionStats[req.pc][name].first++;
+         if (lineId == -1 /*&& cc->shouldAllocate(req)*/) {
++            if (req.pc)
++                perInstructionStats[req.pc][name].second++;
+             assert(cc->shouldAllocate(req)); //dsm: for now, we don't deal with non-inclusion in TimingCache
+ 
+             //Make space for new line
+diff --git a/src/timing_core.cpp b/src/timing_core.cpp
+index 77b236b..0cf7d57 100644
+--- a/src/timing_core.cpp
++++ b/src/timing_core.cpp
+@@ -77,15 +77,15 @@ void TimingCore::leave() {
+     cRec.notifyLeave(curCycle);
+ }
+ 
+-void TimingCore::loadAndRecord(Address addr) {
++void TimingCore::loadAndRecord(Address pc, Address addr) {
+     uint64_t startCycle = curCycle;
+-    curCycle = l1d->load(addr, curCycle);
++    curCycle = l1d->load(pc, addr, curCycle);
+     cRec.record(startCycle);
+ }
+ 
+-void TimingCore::storeAndRecord(Address addr) {
++void TimingCore::storeAndRecord(Address pc, Address addr) {
+     uint64_t startCycle = curCycle;
+-    curCycle = l1d->store(addr, curCycle);
++    curCycle = l1d->store(pc, addr, curCycle);
+     cRec.record(startCycle);
+ }
+ 
+@@ -96,7 +96,7 @@ void TimingCore::bblAndRecord(Address bblAddr, BblInfo* bblInfo) {
+     Address endBblAddr = bblAddr + bblInfo->bytes;
+     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
+         uint64_t startCycle = curCycle;
+-        curCycle = l1i->load(fetchAddr, curCycle);
++        curCycle = l1i->load(0, fetchAddr, curCycle);
+         cRec.record(startCycle);
+     }
+ }
+@@ -106,12 +106,12 @@ InstrFuncPtrs TimingCore::GetFuncPtrs() {
+     return {LoadAndRecordFunc, StoreAndRecordFunc, BblAndRecordFunc, BranchFunc, PredLoadAndRecordFunc, PredStoreAndRecordFunc, FPTR_ANALYSIS, {0}};
+ }
+ 
+-void TimingCore::LoadAndRecordFunc(THREADID tid, ADDRINT addr) {
+-    static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr);
++void TimingCore::LoadAndRecordFunc(THREADID tid, ADDRINT pc, ADDRINT addr) {
++    static_cast<TimingCore*>(cores[tid])->loadAndRecord(pc, addr);
+ }
+ 
+-void TimingCore::StoreAndRecordFunc(THREADID tid, ADDRINT addr) {
+-    static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr);
++void TimingCore::StoreAndRecordFunc(THREADID tid, ADDRINT pc, ADDRINT addr) {
++    static_cast<TimingCore*>(cores[tid])->storeAndRecord(pc, addr);
+ }
+ 
+ void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+@@ -126,11 +126,11 @@ void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInf
+     }
+ }
+ 
+-void TimingCore::PredLoadAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+-    if (pred) static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr);
++void TimingCore::PredLoadAndRecordFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred) {
++    if (pred) static_cast<TimingCore*>(cores[tid])->loadAndRecord(pc, addr);
+ }
+ 
+-void TimingCore::PredStoreAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+-    if (pred) static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr);
++void TimingCore::PredStoreAndRecordFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred) {
++    if (pred) static_cast<TimingCore*>(cores[tid])->storeAndRecord(pc, addr);
+ }
+ 
+diff --git a/src/timing_core.h b/src/timing_core.h
+index 79b54d8..3faf2cd 100644
+--- a/src/timing_core.h
++++ b/src/timing_core.h
+@@ -66,16 +66,16 @@ class TimingCore : public Core {
+         void cSimEnd() {curCycle = cRec.cSimEnd(curCycle);}
+ 
+     private:
+-        inline void loadAndRecord(Address addr);
+-        inline void storeAndRecord(Address addr);
++        inline void loadAndRecord(Address pc, Address addr);
++        inline void storeAndRecord(Address pc, Address addr);
+         inline void bblAndRecord(Address bblAddr, BblInfo* bblInstrs);
+         inline void record(uint64_t startCycle);
+ 
+-        static void LoadAndRecordFunc(THREADID tid, ADDRINT addr);
+-        static void StoreAndRecordFunc(THREADID tid, ADDRINT addr);
++        static void LoadAndRecordFunc(THREADID tid, ADDRINT pc, ADDRINT addr);
++        static void StoreAndRecordFunc(THREADID tid, ADDRINT pc, ADDRINT addr);
+         static void BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
+-        static void PredLoadAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred);
+-        static void PredStoreAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred);
++        static void PredLoadAndRecordFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred);
++        static void PredStoreAndRecordFunc(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred);
+ 
+         static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
+ } ATTR_LINE_ALIGNED;
+diff --git a/src/trace_driver.cpp b/src/trace_driver.cpp
+index 6c312bd..2449c71 100644
+--- a/src/trace_driver.cpp
++++ b/src/trace_driver.cpp
+@@ -133,7 +133,7 @@ void TraceDriver::executeAccess(AccessRecord acc) {
+                 if (!playPuts) return;
+                 std::unordered_map<Address, MESIState>::iterator it = cStore.find(acc.lineAddr);
+                 if (it == cStore.end()) return; //we don't currently have this line, skip
+-                MemReq req = {acc.lineAddr, acc.type, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId};
++                MemReq req = {0, acc.lineAddr, acc.type, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId};
+                 lat = parent->access(req) - acc.reqCycle; //note that PUT latency does not affect driver latency
+                 assert(it->second == I);
+                 cStore.erase(it);
+@@ -147,7 +147,7 @@ void TraceDriver::executeAccess(AccessRecord acc) {
+                 if (it != cStore.end()) {
+                     if (!((it->second == S) && (acc.type == GETX))) { //we have the line, and it's not an upgrade miss, we can't replay this access directly
+                         if (playAllGets) { //issue a PUT
+-                            MemReq req = {acc.lineAddr, (it->second == M)? PUTX : PUTS, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId};
++                            MemReq req = {0, acc.lineAddr, (it->second == M)? PUTX : PUTS, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId};
+                             parent->access(req);
+                             assert(it->second == I);
+                         } else {
+@@ -157,7 +157,7 @@ void TraceDriver::executeAccess(AccessRecord acc) {
+                         state = it->second;
+                     }
+                 }
+-                MemReq req = {acc.lineAddr, acc.type, acc.childId, &state, acc.reqCycle, nullptr, state, acc.childId};
++                MemReq req = {0, acc.lineAddr, acc.type, acc.childId, &state, acc.reqCycle, nullptr, state, acc.childId};
+                 uint64_t respCycle = parent->access(req);
+                 lat = respCycle - acc.reqCycle;
+                 children[acc.childId].profLat.inc(lat);
+diff --git a/src/zsim.cpp b/src/zsim.cpp
+index b62ed58..016985e 100644
+--- a/src/zsim.cpp
++++ b/src/zsim.cpp
+@@ -165,12 +165,12 @@ VOID FFThread(VOID* arg);
+ 
+ InstrFuncPtrs fPtrs[MAX_THREADS] ATTR_LINE_ALIGNED; //minimize false sharing
+ 
+-VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT addr) {
+-    fPtrs[tid].loadPtr(tid, addr);
++VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT pc, ADDRINT addr) {
++    fPtrs[tid].loadPtr(tid, pc, addr);
+ }
+ 
+-VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT addr) {
+-    fPtrs[tid].storePtr(tid, addr);
++VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT pc, ADDRINT addr) {
++    fPtrs[tid].storePtr(tid, pc, addr);
+ }
+ 
+ VOID PIN_FAST_ANALYSIS_CALL IndirectBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+@@ -181,12 +181,12 @@ VOID PIN_FAST_ANALYSIS_CALL IndirectRecordBranch(THREADID tid, ADDRINT branchPc,
+     fPtrs[tid].branchPtr(tid, branchPc, taken, takenNpc, notTakenNpc);
+ }
+ 
+-VOID PIN_FAST_ANALYSIS_CALL IndirectPredLoadSingle(THREADID tid, ADDRINT addr, BOOL pred) {
+-    fPtrs[tid].predLoadPtr(tid, addr, pred);
++VOID PIN_FAST_ANALYSIS_CALL IndirectPredLoadSingle(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred) {
++    fPtrs[tid].predLoadPtr(tid, pc, addr, pred);
+ }
+ 
+-VOID PIN_FAST_ANALYSIS_CALL IndirectPredStoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
+-    fPtrs[tid].predStorePtr(tid, addr, pred);
++VOID PIN_FAST_ANALYSIS_CALL IndirectPredStoreSingle(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred) {
++    fPtrs[tid].predStorePtr(tid, pc, addr, pred);
+ }
+ 
+ 
+@@ -207,14 +207,14 @@ void Join(uint32_t tid) {
+     fPtrs[tid] = cores[tid]->GetFuncPtrs(); //back to normal pointers
+ }
+ 
+-VOID JoinAndLoadSingle(THREADID tid, ADDRINT addr) {
++VOID JoinAndLoadSingle(THREADID tid, ADDRINT pc, ADDRINT addr) {
+     Join(tid);
+-    fPtrs[tid].loadPtr(tid, addr);
++    fPtrs[tid].loadPtr(tid, pc, addr);
+ }
+ 
+-VOID JoinAndStoreSingle(THREADID tid, ADDRINT addr) {
++VOID JoinAndStoreSingle(THREADID tid, ADDRINT pc, ADDRINT addr) {
+     Join(tid);
+-    fPtrs[tid].storePtr(tid, addr);
++    fPtrs[tid].storePtr(tid, pc, addr);
+ }
+ 
+ VOID JoinAndBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+@@ -227,21 +227,21 @@ VOID JoinAndRecordBranch(THREADID tid, ADDRINT branchPc, BOOL taken, ADDRINT tak
+     fPtrs[tid].branchPtr(tid, branchPc, taken, takenNpc, notTakenNpc);
+ }
+ 
+-VOID JoinAndPredLoadSingle(THREADID tid, ADDRINT addr, BOOL pred) {
++VOID JoinAndPredLoadSingle(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred) {
+     Join(tid);
+-    fPtrs[tid].predLoadPtr(tid, addr, pred);
++    fPtrs[tid].predLoadPtr(tid, pc, addr, pred);
+ }
+ 
+-VOID JoinAndPredStoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
++VOID JoinAndPredStoreSingle(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred) {
+     Join(tid);
+-    fPtrs[tid].predStorePtr(tid, addr, pred);
++    fPtrs[tid].predStorePtr(tid, pc, addr, pred);
+ }
+ 
+ // NOP variants: Do nothing
+-VOID NOPLoadStoreSingle(THREADID tid, ADDRINT addr) {}
++VOID NOPLoadStoreSingle(THREADID tid, ADDRINT pc, ADDRINT addr) {}
+ VOID NOPBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {}
+ VOID NOPRecordBranch(THREADID tid, ADDRINT addr, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc) {}
+-VOID NOPPredLoadStoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {}
++VOID NOPPredLoadStoreSingle(THREADID tid, ADDRINT pc, ADDRINT addr, BOOL pred) {}
+ 
+ // FF is basically NOP except for basic blocks
+ VOID FFBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+@@ -541,25 +541,25 @@ VOID Instruction(INS ins) {
+ 
+         if (INS_IsMemoryRead(ins)) {
+             if (!INS_IsPredicated(ins)) {
+-                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_END);
++                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_REG_VALUE, REG_INST_PTR, IARG_MEMORYREAD_EA, IARG_END);
+             } else {
+-                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_EXECUTING, IARG_END);
++                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_REG_VALUE, REG_INST_PTR, IARG_MEMORYREAD_EA, IARG_EXECUTING, IARG_END);
+             }
+         }
+ 
+         if (INS_HasMemoryRead2(ins)) {
+             if (!INS_IsPredicated(ins)) {
+-                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_END);
++                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_REG_VALUE, REG_INST_PTR, IARG_MEMORYREAD2_EA, IARG_END);
+             } else {
+-                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_EXECUTING, IARG_END);
++                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_REG_VALUE, REG_INST_PTR, IARG_MEMORYREAD2_EA, IARG_EXECUTING, IARG_END);
+             }
+         }
+ 
+         if (INS_IsMemoryWrite(ins)) {
+             if (!INS_IsPredicated(ins)) {
+-                INS_InsertCall(ins, IPOINT_BEFORE,  StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_END);
++                INS_InsertCall(ins, IPOINT_BEFORE,  StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_REG_VALUE, REG_INST_PTR, IARG_MEMORYWRITE_EA, IARG_END);
+             } else {
+-                INS_InsertCall(ins, IPOINT_BEFORE,  PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_EXECUTING, IARG_END);
++                INS_InsertCall(ins, IPOINT_BEFORE,  PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_REG_VALUE, REG_INST_PTR, IARG_MEMORYWRITE_EA, IARG_EXECUTING, IARG_END);
+             }
+         }
+ 
+@@ -1116,6 +1116,20 @@ VOID SimEnd() {
+         for (AccessTraceWriter* t : *(zinfo->traceWriters)) t->dump(false);  // flushes trace writer
+ 
+         if (zinfo->sched) zinfo->sched->notifyTermination();
++
++        for (auto i = perInstructionStats.begin(); i != perInstructionStats.end(); ++i)
++        {
++            std::string str = std::to_string(i->first) + "\t\t";
++            for (auto j = i->second.begin(); j != i->second.end(); ++j)
++            {
++                str += std::string(j->first.c_str()) + ": ";
++                str += std::to_string(j->second.second*100/j->second.first);
++                str += "%";
++                if (j != --i->second.end())
++                    str += ", ";
++            }
++            info("%s", str.c_str());
++        }
+     }
+ 
+     //Uncomment when debugging termination races, which can be rare because they are triggered by threads of a dying process
+diff --git a/src/zsim.h b/src/zsim.h
+index bba2836..208ffea 100644
+--- a/src/zsim.h
++++ b/src/zsim.h
+@@ -33,6 +33,10 @@
+ #include "locks.h"
+ #include "pad.h"
+ 
++#include <map>
++#include <utility>
++#include "g_std/g_string.h"
++
+ class Core;
+ class Scheduler;
+ class AggregateStat;
+@@ -183,6 +187,12 @@ struct GlobSimInfo {
+     TraceDriver* traceDriver;
+ };
+ 
++// This is a map of maps!
++// The top map key is an address representing instructions by PC.
++// The inside level map key is a string representing each cache name.
++// The pair represents two counters, first for total accesses, second for
++// misses
++extern std::map<uint64_t, std::map<g_string, std::pair<uint64_t, uint64_t>>> perInstructionStats;
+ 
+ //Process-wide global variables, defined in zsim.cpp
+ extern Core* cores[MAX_THREADS]; //tid->core array
