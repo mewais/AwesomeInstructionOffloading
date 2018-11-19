@@ -1,23 +1,59 @@
 diff --git a/src/cache.cpp b/src/cache.cpp
-index 315e6bf..f713666 100644
+index 315e6bf..d513103 100644
 --- a/src/cache.cpp
 +++ b/src/cache.cpp
-@@ -66,7 +66,15 @@ uint64_t Cache::access(MemReq& req) {
+@@ -62,11 +62,27 @@ uint64_t Cache::access(MemReq& req) {
+     uint64_t respCycle = req.cycle;
+     bool skipAccess = cc->startAccess(req); //may need to skip access due to races (NOTE: may change req.type!)
+     if (likely(!skipAccess)) {
++        // info("%s: Started access to %lu by instruction %lu for %s", this->name.c_str(), req.lineAddr, req.pc, AccessTypeName(req.type));
+         bool updateReplacement = (req.type == GETS) || (req.type == GETX);
          int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement);
          respCycle += accLat;
  
-+        if (perInstructionStats.find(req.pc) == perInstructionStats.end())
-+            perInstructionStats[req.pc][name] = std::make_pair(0, 0);
-+        if (perInstructionStats[req.pc].find(name) == perInstructionStats[req.pc].end())
-+            perInstructionStats[req.pc][name] = std::make_pair(0, 0);
++        if (updateReplacement)
++            assert(req.pc);
 +        if (req.pc)
++        {
++            assert(updateReplacement);
++            if (perInstructionStats.find(req.pc) == perInstructionStats.end())
++                perInstructionStats[req.pc][name] = std::make_pair(0, 0);
++            if (perInstructionStats[req.pc].find(name) == perInstructionStats[req.pc].end())
++                perInstructionStats[req.pc][name] = std::make_pair(0, 0);
 +            perInstructionStats[req.pc][name].first++;
++        }
          if (lineId == -1 && cc->shouldAllocate(req)) {
 +            if (req.pc)
++            {
 +                perInstructionStats[req.pc][name].second++;
++            }
              //Make space for new line
              Address wbLineAddr;
              lineId = array->preinsert(req.lineAddr, &req, &wbLineAddr); //find the lineId to replace
+@@ -74,6 +90,7 @@ uint64_t Cache::access(MemReq& req) {
+ 
+             //Evictions are not in the critical path in any sane implementation -- we do not include their delays
+             //NOTE: We might be "evicting" an invalid line for all we know. Coherence controllers will know what to do
++            // info("%s: Victim line %lu", this->name.c_str(), wbLineAddr);
+             cc->processEviction(req, wbLineAddr, lineId, respCycle); //1. if needed, send invalidates/downgrades to lower level
+ 
+             array->postinsert(req.lineAddr, &req, lineId); //do the actual insertion. NOTE: Now we must split insert into a 2-phase thing because cc unlocks us.
+@@ -88,6 +105,7 @@ uint64_t Cache::access(MemReq& req) {
+         }
+ 
+         respCycle = cc->processAccess(req, lineId, respCycle);
++        // info("%s: Ended access to %lu by instruction %lu for %s", this->name.c_str(), req.lineAddr, req.pc, AccessTypeName(req.type));
+ 
+         // Access may have generated another timing record. If *both* access
+         // and wb have records, stitch them together
+@@ -130,6 +148,7 @@ void Cache::startInvalidate() {
+ }
+ 
+ uint64_t Cache::finishInvalidate(const InvReq& req) {
++    // info("%s: recieved invalidate on %lu", this->name.c_str(), req.lineAddr);
+     int32_t lineId = array->lookup(req.lineAddr, nullptr, false);
+     assert_msg(lineId != -1, "[%s] Invalidate on non-existing address 0x%lx type %s lineId %d, reqWriteback %d", name.c_str(), req.lineAddr, InvTypeName(req.type), lineId, *req.writeback);
+     uint64_t respCycle = req.cycle + invLat;
 diff --git a/src/coherence_ctrls.cpp b/src/coherence_ctrls.cpp
 index 426f80a..564edbd 100644
 --- a/src/coherence_ctrls.cpp
@@ -148,6 +184,41 @@ index 28f8f5c..616d22e 100644
      uint64_t type;
      uint64_t pad[1];
      //NOTE: By having the struct be a power of 2 bytes, indirect calls are simpler (w/ gcc 4.4 -O3, 6->5 instructions, and those instructions are simpler)
+diff --git a/src/ddr_mem.cpp b/src/ddr_mem.cpp
+index 8a335b3..ef2786f 100644
+--- a/src/ddr_mem.cpp
++++ b/src/ddr_mem.cpp
+@@ -244,12 +244,15 @@ uint64_t DDRMemory::access(MemReq& req) {
+     switch (req.type) {
+         case PUTS:
+         case PUTX:
++            profWrites.inc();
+             *req.state = I;
+             break;
+         case GETS:
++            profReads.inc();
+             *req.state = req.is(MemReq::NOEXCL)? S : E;
+             break;
+         case GETX:
++            profReads.inc();
+             *req.state = M;
+             break;
+ 
+@@ -610,14 +613,12 @@ uint64_t DDRMemory::trySchedule(uint64_t curCycle, uint64_t sysCycle) {
+         ev->done(doneSysCycle - preDelay - postDelayRd);
+ 
+         uint32_t scDelay = doneSysCycle - r->startSysCycle;
+-        profReads.inc();
+         profTotalRdLat.inc(scDelay);
+         if (rowHit) profReadHits.inc();
+         uint32_t bucket = std::min(NUMBINS-1, scDelay/BINSIZE);
+         latencyHist.inc(bucket, 1);
+     } else {
+         uint32_t scDelay = memToSysCycle(minRespCycle) + controllerSysLatency - r->startSysCycle;
+-        profWrites.inc();
+         profTotalWrLat.inc(scDelay);
+         if (rowHit) profWriteHits.inc();
+     }
 diff --git a/src/filter_cache.h b/src/filter_cache.h
 index 9d1fb5e..5281abf 100644
 --- a/src/filter_cache.h
@@ -246,7 +317,7 @@ index 83619e7..15fdf24 100644
          static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
  } ATTR_LINE_ALIGNED; //This needs to take up a whole cache line, or false sharing will be extremely frequent
 diff --git a/src/ooo_core.cpp b/src/ooo_core.cpp
-index 4a2305e..4946718 100644
+index 4a2305e..feabd54 100644
 --- a/src/ooo_core.cpp
 +++ b/src/ooo_core.cpp
 @@ -133,11 +133,13 @@ void OOOCore::contextSwitch(int32_t gid) {
@@ -302,7 +373,7 @@ index 4a2305e..4946718 100644
          uint64_t reqCycle = fetchCycle;
          for (uint32_t i = 0; i < 5*64/lineSize; i++) {
 -            uint64_t fetchLat = l1i->load(wrongPathAddr + lineSize*i, curCycle) - curCycle;
-+            uint64_t fetchLat = l1i->load(0, wrongPathAddr + lineSize*i, curCycle) - curCycle;
++            uint64_t fetchLat = l1i->load(1, wrongPathAddr + lineSize*i, curCycle) - curCycle;
              cRec.record(curCycle, curCycle, curCycle + fetchLat);
              uint64_t respCycle = reqCycle + fetchLat;
              if (respCycle > lastCommitCycle) {
@@ -311,7 +382,7 @@ index 4a2305e..4946718 100644
          // We always call fetches with curCycle to avoid upsetting the weave
          // models (but we could move to a fetch-centric recorder to avoid this)
 -        uint64_t fetchLat = l1i->load(fetchAddr, curCycle) - curCycle;
-+        uint64_t fetchLat = l1i->load(0, fetchAddr, curCycle) - curCycle;
++        uint64_t fetchLat = l1i->load(1, fetchAddr, curCycle) - curCycle;
          cRec.record(curCycle, curCycle, curCycle + fetchLat);
          fetchCycle += fetchLat;
      }
@@ -394,7 +465,7 @@ index b440c4c..1d7e791 100644
                      e.valid[prefetchPos] = true;
                      e.times[prefetchPos].fill(reqCycle, pfRespCycle);
 diff --git a/src/simple_core.cpp b/src/simple_core.cpp
-index 5102faa..5c37a91 100644
+index 5102faa..30f9e6f 100644
 --- a/src/simple_core.cpp
 +++ b/src/simple_core.cpp
 @@ -47,12 +47,12 @@ uint64_t SimpleCore::getPhaseCycles() const {
@@ -419,7 +490,7 @@ index 5102faa..5c37a91 100644
      Address endBblAddr = bblAddr + bblInfo->bytes;
      for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
 -        curCycle = l1i->load(fetchAddr, curCycle);
-+        curCycle = l1i->load(0, fetchAddr, curCycle);
++        curCycle = l1i->load(1, fetchAddr, curCycle);
      }
  }
  
@@ -479,27 +550,34 @@ index 8a3a143..8299793 100644
          static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
  }  ATTR_LINE_ALIGNED; //This needs to take up a whole cache line, or false sharing will be extremely frequent
 diff --git a/src/timing_cache.cpp b/src/timing_cache.cpp
-index be43a28..e6fb432 100644
+index be43a28..ddb1694 100644
 --- a/src/timing_cache.cpp
 +++ b/src/timing_cache.cpp
-@@ -127,7 +127,15 @@ uint64_t TimingCache::access(MemReq& req) {
+@@ -127,7 +127,22 @@ uint64_t TimingCache::access(MemReq& req) {
          int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement);
          respCycle += accLat;
  
-+        if (perInstructionStats.find(req.pc) == perInstructionStats.end())
-+            perInstructionStats[req.pc][name] = std::make_pair(0, 0);
-+        if (perInstructionStats[req.pc].find(name) == perInstructionStats[req.pc].end())
-+            perInstructionStats[req.pc][name] = std::make_pair(0, 0);
++        if (updateReplacement)
++            assert(req.pc);
 +        if (req.pc)
++        {
++            assert(updateReplacement);
++            if (perInstructionStats.find(req.pc) == perInstructionStats.end())
++                perInstructionStats[req.pc][name] = std::make_pair(0, 0);
++            if (perInstructionStats[req.pc].find(name) == perInstructionStats[req.pc].end())
++                perInstructionStats[req.pc][name] = std::make_pair(0, 0);
 +            perInstructionStats[req.pc][name].first++;
++        }
          if (lineId == -1 /*&& cc->shouldAllocate(req)*/) {
 +            if (req.pc)
++            {
 +                perInstructionStats[req.pc][name].second++;
++            }
              assert(cc->shouldAllocate(req)); //dsm: for now, we don't deal with non-inclusion in TimingCache
  
              //Make space for new line
 diff --git a/src/timing_core.cpp b/src/timing_core.cpp
-index 77b236b..0cf7d57 100644
+index 77b236b..1bb5222 100644
 --- a/src/timing_core.cpp
 +++ b/src/timing_core.cpp
 @@ -77,15 +77,15 @@ void TimingCore::leave() {
@@ -527,7 +605,7 @@ index 77b236b..0cf7d57 100644
      for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
          uint64_t startCycle = curCycle;
 -        curCycle = l1i->load(fetchAddr, curCycle);
-+        curCycle = l1i->load(0, fetchAddr, curCycle);
++        curCycle = l1i->load(1, fetchAddr, curCycle);
          cRec.record(startCycle);
      }
  }
@@ -623,10 +701,19 @@ index 6c312bd..2449c71 100644
                  lat = respCycle - acc.reqCycle;
                  children[acc.childId].profLat.inc(lat);
 diff --git a/src/zsim.cpp b/src/zsim.cpp
-index b62ed58..016985e 100644
+index b62ed58..d0004ed 100644
 --- a/src/zsim.cpp
 +++ b/src/zsim.cpp
-@@ -165,12 +165,12 @@ VOID FFThread(VOID* arg);
+@@ -94,6 +94,8 @@ INT32 Usage() {
+ /* Global Variables */
+ 
+ GlobSimInfo* zinfo;
++std::map<uint64_t, std::map<g_string, std::pair<uint64_t, uint64_t>>> perInstructionStats;
++std::map<uint64_t, std::string> InstructionsByAddress;
+ 
+ /* Per-process variables */
+ 
+@@ -165,12 +167,12 @@ VOID FFThread(VOID* arg);
  
  InstrFuncPtrs fPtrs[MAX_THREADS] ATTR_LINE_ALIGNED; //minimize false sharing
  
@@ -643,7 +730,7 @@ index b62ed58..016985e 100644
  }
  
  VOID PIN_FAST_ANALYSIS_CALL IndirectBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
-@@ -181,12 +181,12 @@ VOID PIN_FAST_ANALYSIS_CALL IndirectRecordBranch(THREADID tid, ADDRINT branchPc,
+@@ -181,12 +183,12 @@ VOID PIN_FAST_ANALYSIS_CALL IndirectRecordBranch(THREADID tid, ADDRINT branchPc,
      fPtrs[tid].branchPtr(tid, branchPc, taken, takenNpc, notTakenNpc);
  }
  
@@ -660,7 +747,7 @@ index b62ed58..016985e 100644
  }
  
  
-@@ -207,14 +207,14 @@ void Join(uint32_t tid) {
+@@ -207,14 +209,14 @@ void Join(uint32_t tid) {
      fPtrs[tid] = cores[tid]->GetFuncPtrs(); //back to normal pointers
  }
  
@@ -679,7 +766,7 @@ index b62ed58..016985e 100644
  }
  
  VOID JoinAndBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
-@@ -227,21 +227,21 @@ VOID JoinAndRecordBranch(THREADID tid, ADDRINT branchPc, BOOL taken, ADDRINT tak
+@@ -227,21 +229,21 @@ VOID JoinAndRecordBranch(THREADID tid, ADDRINT branchPc, BOOL taken, ADDRINT tak
      fPtrs[tid].branchPtr(tid, branchPc, taken, takenNpc, notTakenNpc);
  }
  
@@ -707,7 +794,15 @@ index b62ed58..016985e 100644
  
  // FF is basically NOP except for basic blocks
  VOID FFBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
-@@ -541,25 +541,25 @@ VOID Instruction(INS ins) {
+@@ -533,6 +535,7 @@ VOID Instruction(INS ins) {
+     //INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)PrintIp, IARG_THREAD_ID, IARG_REG_VALUE, REG_INST_PTR, IARG_END);
+ 
+     if (!procTreeNode->isInFastForward() || !zinfo->ffReinstrument) {
++        InstructionsByAddress[INS_Address(ins)] = INS_Disassemble(ins);
+         AFUNPTR LoadFuncPtr = (AFUNPTR) IndirectLoadSingle;
+         AFUNPTR StoreFuncPtr = (AFUNPTR) IndirectStoreSingle;
+ 
+@@ -541,25 +544,25 @@ VOID Instruction(INS ins) {
  
          if (INS_IsMemoryRead(ins)) {
              if (!INS_IsPredicated(ins)) {
@@ -739,19 +834,25 @@ index b62ed58..016985e 100644
              }
          }
  
-@@ -1116,6 +1116,20 @@ VOID SimEnd() {
+@@ -1116,6 +1119,26 @@ VOID SimEnd() {
          for (AccessTraceWriter* t : *(zinfo->traceWriters)) t->dump(false);  // flushes trace writer
  
          if (zinfo->sched) zinfo->sched->notifyTermination();
 +
 +        for (auto i = perInstructionStats.begin(); i != perInstructionStats.end(); ++i)
 +        {
-+            std::string str = std::to_string(i->first) + "\t\t";
++            if (i->first == 1)
++                continue;
++            std::stringstream ss;
++            ss << "PC " << std::hex << i->first;
++            std::string str = ss.str() + "\t\t";
++            str += InstructionsByAddress[i->first] + "\t\t";
 +            for (auto j = i->second.begin(); j != i->second.end(); ++j)
 +            {
 +                str += std::string(j->first.c_str()) + ": ";
-+                str += std::to_string(j->second.second*100/j->second.first);
-+                str += "%";
++                str += std::to_string(j->second.second);
++                str += "/";
++                str += std::to_string(j->second.first);
 +                if (j != --i->second.end())
 +                    str += ", ";
 +            }
@@ -761,7 +862,7 @@ index b62ed58..016985e 100644
  
      //Uncomment when debugging termination races, which can be rare because they are triggered by threads of a dying process
 diff --git a/src/zsim.h b/src/zsim.h
-index bba2836..208ffea 100644
+index bba2836..f830781 100644
 --- a/src/zsim.h
 +++ b/src/zsim.h
 @@ -33,6 +33,10 @@
@@ -775,7 +876,7 @@ index bba2836..208ffea 100644
  class Core;
  class Scheduler;
  class AggregateStat;
-@@ -183,6 +187,12 @@ struct GlobSimInfo {
+@@ -183,6 +187,13 @@ struct GlobSimInfo {
      TraceDriver* traceDriver;
  };
  
@@ -785,6 +886,7 @@ index bba2836..208ffea 100644
 +// The pair represents two counters, first for total accesses, second for
 +// misses
 +extern std::map<uint64_t, std::map<g_string, std::pair<uint64_t, uint64_t>>> perInstructionStats;
++extern std::map<uint64_t, std::string> InstructionsByAddress;
  
  //Process-wide global variables, defined in zsim.cpp
  extern Core* cores[MAX_THREADS]; //tid->core array

@@ -1,18 +1,21 @@
 
-TRGS = bfs bfs_atomic
+TRGS = bfs # bfs_atomic
 
 LIBS += -lpthread -lrt
 
 CXXFLAGS = -g --std=c++0x -O3
 CXXFLAGS += -Wall
 
-all: $(TRGS)
+all: asm
+
+asm: $(TRGS)
+	objdump -Sd $(TRGS) $(TRGS).s
 
 bfs: bfs.cc
 bfs_atomic: bfs_atomic.cc
 
 clean:
-	rm -f $(TRGS) *.o *.dot
+	rm -f $(TRGS) $(TRGS).s *.o *.dot
 	rm -f myfile.txt
 
 %: %.cc ;

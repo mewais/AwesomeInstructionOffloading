@@ -1,2 +1,3 @@
 CPU/simulator/zsim/build
 CPU/simulator/zsim/.sconsign.dblite
+CPU/benchmarks/**/run.out

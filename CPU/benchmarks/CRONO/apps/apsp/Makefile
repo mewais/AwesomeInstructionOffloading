@@ -10,14 +10,17 @@ LIBS += -lpthread -lrt
 CXXFLAGS = -g --std=c++0x -O3
 CXXFLAGS += -Wall -Werror
 
-all: $(TRGS)
+all: asm
+
+asm: $(TRGS)
+	objdump -Sd $(TRGS) $(TRGS).s
 
 apsp: apsp.cc
 
 ##boost_dijk_real: boost_dijk_real.cc
 
 clean:
-	rm -f $(TRGS) *.o *.dot
+	rm -f $(TRGS) $(TRGS).s *.o *.dot
 
 %: %.cc ;
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LIBS)

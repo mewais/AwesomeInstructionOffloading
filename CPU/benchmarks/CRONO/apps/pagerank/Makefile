@@ -1,18 +1,21 @@
 
-TRGS = pagerank pagerank_lock
+TRGS = pagerank # pagerank_lock
 
 LIBS += -lpthread -lrt
 
 CXXFLAGS = -g --std=c++0x -O3
 CXXFLAGS += -Wall -Werror
 
-all: $(TRGS)
+all: asm
+
+asm: $(TRGS)
+	objdump -Sd $(TRGS) $(TRGS).s
 
 pagerank: pagerank.cc
 pagerank_lock: pagerank_lock.cc
 
 clean:
-	rm -f $(TRGS) *.o *.dot
+	rm -f $(TRGS) $(TRGS).s *.o *.dot
 	rm -f file.txt
 
 %: %.cc ;
