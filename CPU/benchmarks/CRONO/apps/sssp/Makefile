@@ -1,5 +1,5 @@
 
-TRGS = sssp # sssp_outer sssp_outer_atomic
+TRGS = sssp
 
 LIBS += -lpthread -lrt
 
@@ -13,14 +13,14 @@ CXXFLAGS += -Wall -Werror
 all: asm
 
 asm: $(TRGS)
-	objdump -Sd $(TRGS) $(TRGS).s
+	objdump -Sd $(TRGS) > $(TRGS).s
 
 sssp: sssp.cc
 sssp_outer: sssp_outer.cc
 sssp_outer_atomic: sssp_outer_atomic.cc
 
 clean:
-	rm -f $(TRGS) $(TRGS).s *.o *.dot
+	rm -f $(TRGS) *.o *.dot
 
 %: %.cc ;
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LIBS)

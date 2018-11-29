@@ -1,5 +1,5 @@
 
-TRGS = community_lock # community_atomic
+TRGS = community_lock
 
 LIBS += -lpthread -lrt
 
@@ -9,13 +9,13 @@ CXXFLAGS += -Wall -Werror
 all: asm
 
 asm: $(TRGS)
-	objdump -Sd $(TRGS) $(TRGS).s
+	objdump -Sd $(TRGS) > $(TRGS).s
 
 community_lock: community_lock.cc
 community_atomic: community_atomic.cc
 
 clean:
-	rm -f $(TRGS) $(TRGS).s *.o *.dot
+	rm -f $(TRGS) *.o *.dot
 
 %: %.cc ;
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LIBS)

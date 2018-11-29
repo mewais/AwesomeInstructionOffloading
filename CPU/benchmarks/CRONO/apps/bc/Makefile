@@ -1,5 +1,5 @@
 
-TRGS = bc # bc_non_partitioned
+TRGS = bc
 
 LIBS += -lpthread -lrt
 
@@ -13,7 +13,7 @@ CXXFLAGS += -Wall -Werror
 all: asm
 
 asm: $(TRGS)
-	objdump -Sd $(TRGS) $(TRGS).s
+	objdump -Sd $(TRGS) > $(TRGS).s
 
 bc: bc.cc
 bc_non_partitioned: bc_non_partitioned.cc
@@ -21,7 +21,7 @@ bc_non_partitioned: bc_non_partitioned.cc
 ##boost_dijk_real: boost_dijk_real.cc
 
 clean:
-	rm -f $(TRGS) $(TRGS).s *.o *.dot
+	rm -f $(TRGS) *.o *.dot
 
 %: %.cc ;
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LIBS)

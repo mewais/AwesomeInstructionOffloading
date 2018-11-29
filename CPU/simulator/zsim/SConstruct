@@ -104,7 +104,7 @@ def buildSim(cppFlags, dir, type, pgo=None):
     if not os.path.exists(pindwarfPath):
         pindwarfLib = "pindwarf"
 
-    env["PINLIBS"] = ["pin", "xed", pindwarfLib, "elf", "dl", "rt"]
+    env["PINLIBS"] = ["pin", "xed", pindwarfLib, "elf", "dl", "rt", "z"]
 
     # Non-pintool libraries
     env["LIBPATH"] = []

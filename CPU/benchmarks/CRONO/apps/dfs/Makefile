@@ -9,12 +9,12 @@ CXXFLAGS += -Wall -Werror
 all: asm
 
 asm: $(TRGS)
-	objdump -Sd $(TRGS) $(TRGS).s
+	objdump -Sd $(TRGS) > $(TRGS).s
 
 dfs: dfs.cc
 
 clean:
-	rm -f $(TRGS) $(TRGS).s *.o *.dot
+	rm -f $(TRGS) *.o *.dot
 
 %: %.cc ;
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LIBS)

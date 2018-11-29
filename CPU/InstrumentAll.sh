@@ -14,7 +14,7 @@ make -j
 for bench in apps/*/
 do
     cd $bench
-    ../../../../simulator/zsim/build/opt/zsim run.cfg | grep "[S 0] PC" > run.out
+    ../../../../simulator/zsim/build/opt/zsim run.cfg | grep "\[S 0\] PC" | cut -d " " -f 3- > run.out
     ## cleanup after run
     rm -f heartbeat zsim-* out.cfg core.* pin*
     cd -
@@ -24,7 +24,7 @@ cd ../../
 ## Cleanup zsim
 cd simulator/zsim/
 scons -c
-rm core.*
+rm -f core.*
 git reset --hard
 cd -
 

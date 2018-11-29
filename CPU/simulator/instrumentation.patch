@@ -317,7 +317,7 @@ index 83619e7..15fdf24 100644
          static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
  } ATTR_LINE_ALIGNED; //This needs to take up a whole cache line, or false sharing will be extremely frequent
 diff --git a/src/ooo_core.cpp b/src/ooo_core.cpp
-index 4a2305e..feabd54 100644
+index 4a2305e..f382644 100644
 --- a/src/ooo_core.cpp
 +++ b/src/ooo_core.cpp
 @@ -133,11 +133,13 @@ void OOOCore::contextSwitch(int32_t gid) {
@@ -344,7 +344,7 @@ index 4a2305e..feabd54 100644
      loadAddrs[loads++] = -1L;
  }
  
-@@ -265,10 +268,11 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+@@ -265,10 +268,12 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
                      // Wait for all previous store addresses to be resolved
                      dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
  
@@ -354,10 +354,11 @@ index 4a2305e..feabd54 100644
                      if (addr != ((Address)-1L)) {
 -                        reqSatisfiedCycle = l1d->load(addr, dispatchCycle) + L1D_LAT;
 +                        reqSatisfiedCycle = l1d->load(pc, addr, dispatchCycle) + L1D_LAT;
++                        perInstructionCycles[pc] += reqSatisfiedCycle - dispatchCycle;
                          cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
                      }
  
-@@ -304,8 +308,9 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+@@ -304,8 +309,10 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
                      // Wait for all previous store addresses to be resolved (not just ours :))
                      dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
  
@@ -365,10 +366,11 @@ index 4a2305e..feabd54 100644
                      Address addr = storeAddrs[storeIdx++];
 -                    uint64_t reqSatisfiedCycle = l1d->store(addr, dispatchCycle) + L1D_LAT;
 +                    uint64_t reqSatisfiedCycle = l1d->store(pc, addr, dispatchCycle) + L1D_LAT;
++                    perInstructionCycles[pc] += reqSatisfiedCycle - dispatchCycle;
                      cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
  
                      // Fill the forwarding table
-@@ -404,7 +409,7 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+@@ -404,7 +411,7 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
          Address wrongPathAddr = branchTaken? branchNotTakenNpc : branchTakenNpc;
          uint64_t reqCycle = fetchCycle;
          for (uint32_t i = 0; i < 5*64/lineSize; i++) {
@@ -377,7 +379,7 @@ index 4a2305e..feabd54 100644
              cRec.record(curCycle, curCycle, curCycle + fetchLat);
              uint64_t respCycle = reqCycle + fetchLat;
              if (respCycle > lastCommitCycle) {
-@@ -425,7 +430,7 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+@@ -425,7 +432,7 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
          // Do not model fetch throughput limit here, decoder-generated stalls already include it
          // We always call fetches with curCycle to avoid upsetting the weave
          // models (but we could move to a fetch-centric recorder to avoid this)
@@ -386,7 +388,7 @@ index 4a2305e..feabd54 100644
          cRec.record(curCycle, curCycle, curCycle + fetchLat);
          fetchCycle += fetchLat;
      }
-@@ -484,18 +489,18 @@ void OOOCore::advance(uint64_t targetCycle) {
+@@ -484,18 +491,18 @@ void OOOCore::advance(uint64_t targetCycle) {
  
  // Pin interface code
  
@@ -465,27 +467,32 @@ index b440c4c..1d7e791 100644
                      e.valid[prefetchPos] = true;
                      e.times[prefetchPos].fill(reqCycle, pfRespCycle);
 diff --git a/src/simple_core.cpp b/src/simple_core.cpp
-index 5102faa..30f9e6f 100644
+index 5102faa..f894179 100644
 --- a/src/simple_core.cpp
 +++ b/src/simple_core.cpp
-@@ -47,12 +47,12 @@ uint64_t SimpleCore::getPhaseCycles() const {
+@@ -47,12 +47,17 @@ uint64_t SimpleCore::getPhaseCycles() const {
      return curCycle % zinfo->phaseLength;
  }
  
 -void SimpleCore::load(Address addr) {
 -    curCycle = l1d->load(addr, curCycle);
 +void SimpleCore::load(Address pc, Address addr) {
-+    curCycle = l1d->load(pc, addr, curCycle);
++    uint64_t endCycle = l1d->load(pc, addr, curCycle);
++    perInstructionCycles[pc] += endCycle - curCycle;
++    curCycle = endCycle;
  }
  
 -void SimpleCore::store(Address addr) {
 -    curCycle = l1d->store(addr, curCycle);
 +void SimpleCore::store(Address pc, Address addr) {
-+    curCycle = l1d->store(pc, addr, curCycle);
++    uint64_t endCycle = l1d->store(pc, addr, curCycle);
++    perInstructionCycles[pc] += endCycle - curCycle;
++    curCycle = endCycle;
++
  }
  
  void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
-@@ -63,7 +63,7 @@ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+@@ -63,7 +68,7 @@ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
  
      Address endBblAddr = bblAddr + bblInfo->bytes;
      for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
@@ -494,7 +501,7 @@ index 5102faa..30f9e6f 100644
      }
  }
  
-@@ -92,20 +92,20 @@ InstrFuncPtrs SimpleCore::GetFuncPtrs() {
+@@ -92,20 +97,20 @@ InstrFuncPtrs SimpleCore::GetFuncPtrs() {
      return {LoadFunc, StoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, FPTR_ANALYSIS, {0}};
  }
  
@@ -577,10 +584,10 @@ index be43a28..ddb1694 100644
  
              //Make space for new line
 diff --git a/src/timing_core.cpp b/src/timing_core.cpp
-index 77b236b..1bb5222 100644
+index 77b236b..922715c 100644
 --- a/src/timing_core.cpp
 +++ b/src/timing_core.cpp
-@@ -77,15 +77,15 @@ void TimingCore::leave() {
+@@ -77,15 +77,17 @@ void TimingCore::leave() {
      cRec.notifyLeave(curCycle);
  }
  
@@ -589,6 +596,7 @@ index 77b236b..1bb5222 100644
      uint64_t startCycle = curCycle;
 -    curCycle = l1d->load(addr, curCycle);
 +    curCycle = l1d->load(pc, addr, curCycle);
++    perInstructionCycles[pc] += curCycle - startCycle;
      cRec.record(startCycle);
  }
  
@@ -597,10 +605,11 @@ index 77b236b..1bb5222 100644
      uint64_t startCycle = curCycle;
 -    curCycle = l1d->store(addr, curCycle);
 +    curCycle = l1d->store(pc, addr, curCycle);
++    perInstructionCycles[pc] += curCycle - startCycle;
      cRec.record(startCycle);
  }
  
-@@ -96,7 +96,7 @@ void TimingCore::bblAndRecord(Address bblAddr, BblInfo* bblInfo) {
+@@ -96,7 +98,7 @@ void TimingCore::bblAndRecord(Address bblAddr, BblInfo* bblInfo) {
      Address endBblAddr = bblAddr + bblInfo->bytes;
      for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
          uint64_t startCycle = curCycle;
@@ -609,7 +618,7 @@ index 77b236b..1bb5222 100644
          cRec.record(startCycle);
      }
  }
-@@ -106,12 +106,12 @@ InstrFuncPtrs TimingCore::GetFuncPtrs() {
+@@ -106,12 +108,12 @@ InstrFuncPtrs TimingCore::GetFuncPtrs() {
      return {LoadAndRecordFunc, StoreAndRecordFunc, BblAndRecordFunc, BranchFunc, PredLoadAndRecordFunc, PredStoreAndRecordFunc, FPTR_ANALYSIS, {0}};
  }
  
@@ -626,7 +635,7 @@ index 77b236b..1bb5222 100644
  }
  
  void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
-@@ -126,11 +126,11 @@ void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInf
+@@ -126,11 +128,11 @@ void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInf
      }
  }
  
@@ -701,19 +710,20 @@ index 6c312bd..2449c71 100644
                  lat = respCycle - acc.reqCycle;
                  children[acc.childId].profLat.inc(lat);
 diff --git a/src/zsim.cpp b/src/zsim.cpp
-index b62ed58..d0004ed 100644
+index b62ed58..2c60594 100644
 --- a/src/zsim.cpp
 +++ b/src/zsim.cpp
-@@ -94,6 +94,8 @@ INT32 Usage() {
+@@ -94,6 +94,9 @@ INT32 Usage() {
  /* Global Variables */
  
  GlobSimInfo* zinfo;
 +std::map<uint64_t, std::map<g_string, std::pair<uint64_t, uint64_t>>> perInstructionStats;
++std::map<uint64_t, uint64_t> perInstructionCycles;
 +std::map<uint64_t, std::string> InstructionsByAddress;
  
  /* Per-process variables */
  
-@@ -165,12 +167,12 @@ VOID FFThread(VOID* arg);
+@@ -165,12 +168,12 @@ VOID FFThread(VOID* arg);
  
  InstrFuncPtrs fPtrs[MAX_THREADS] ATTR_LINE_ALIGNED; //minimize false sharing
  
@@ -730,7 +740,7 @@ index b62ed58..d0004ed 100644
  }
  
  VOID PIN_FAST_ANALYSIS_CALL IndirectBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
-@@ -181,12 +183,12 @@ VOID PIN_FAST_ANALYSIS_CALL IndirectRecordBranch(THREADID tid, ADDRINT branchPc,
+@@ -181,12 +184,12 @@ VOID PIN_FAST_ANALYSIS_CALL IndirectRecordBranch(THREADID tid, ADDRINT branchPc,
      fPtrs[tid].branchPtr(tid, branchPc, taken, takenNpc, notTakenNpc);
  }
  
@@ -747,7 +757,7 @@ index b62ed58..d0004ed 100644
  }
  
  
-@@ -207,14 +209,14 @@ void Join(uint32_t tid) {
+@@ -207,14 +210,14 @@ void Join(uint32_t tid) {
      fPtrs[tid] = cores[tid]->GetFuncPtrs(); //back to normal pointers
  }
  
@@ -766,7 +776,7 @@ index b62ed58..d0004ed 100644
  }
  
  VOID JoinAndBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
-@@ -227,21 +229,21 @@ VOID JoinAndRecordBranch(THREADID tid, ADDRINT branchPc, BOOL taken, ADDRINT tak
+@@ -227,21 +230,21 @@ VOID JoinAndRecordBranch(THREADID tid, ADDRINT branchPc, BOOL taken, ADDRINT tak
      fPtrs[tid].branchPtr(tid, branchPc, taken, takenNpc, notTakenNpc);
  }
  
@@ -794,7 +804,7 @@ index b62ed58..d0004ed 100644
  
  // FF is basically NOP except for basic blocks
  VOID FFBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
-@@ -533,6 +535,7 @@ VOID Instruction(INS ins) {
+@@ -533,6 +536,7 @@ VOID Instruction(INS ins) {
      //INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)PrintIp, IARG_THREAD_ID, IARG_REG_VALUE, REG_INST_PTR, IARG_END);
  
      if (!procTreeNode->isInFastForward() || !zinfo->ffReinstrument) {
@@ -802,7 +812,7 @@ index b62ed58..d0004ed 100644
          AFUNPTR LoadFuncPtr = (AFUNPTR) IndirectLoadSingle;
          AFUNPTR StoreFuncPtr = (AFUNPTR) IndirectStoreSingle;
  
-@@ -541,25 +544,25 @@ VOID Instruction(INS ins) {
+@@ -541,25 +545,25 @@ VOID Instruction(INS ins) {
  
          if (INS_IsMemoryRead(ins)) {
              if (!INS_IsPredicated(ins)) {
@@ -834,7 +844,7 @@ index b62ed58..d0004ed 100644
              }
          }
  
-@@ -1116,6 +1119,26 @@ VOID SimEnd() {
+@@ -1116,6 +1120,27 @@ VOID SimEnd() {
          for (AccessTraceWriter* t : *(zinfo->traceWriters)) t->dump(false);  // flushes trace writer
  
          if (zinfo->sched) zinfo->sched->notifyTermination();
@@ -847,12 +857,13 @@ index b62ed58..d0004ed 100644
 +            ss << "PC " << std::hex << i->first;
 +            std::string str = ss.str() + "\t\t";
 +            str += InstructionsByAddress[i->first] + "\t\t";
++            str += std::to_string(perInstructionCycles[i->first]) + "\t\t";
 +            for (auto j = i->second.begin(); j != i->second.end(); ++j)
 +            {
 +                str += std::string(j->first.c_str()) + ": ";
 +                str += std::to_string(j->second.second);
-+                str += "/";
-+                str += std::to_string(j->second.first);
++                // str += "/";
++                // str += std::to_string(j->second.first);
 +                if (j != --i->second.end())
 +                    str += ", ";
 +            }
@@ -862,7 +873,7 @@ index b62ed58..d0004ed 100644
  
      //Uncomment when debugging termination races, which can be rare because they are triggered by threads of a dying process
 diff --git a/src/zsim.h b/src/zsim.h
-index bba2836..f830781 100644
+index bba2836..6960b65 100644
 --- a/src/zsim.h
 +++ b/src/zsim.h
 @@ -33,6 +33,10 @@
@@ -876,7 +887,7 @@ index bba2836..f830781 100644
  class Core;
  class Scheduler;
  class AggregateStat;
-@@ -183,6 +187,13 @@ struct GlobSimInfo {
+@@ -183,6 +187,14 @@ struct GlobSimInfo {
      TraceDriver* traceDriver;
  };
  
@@ -886,6 +897,7 @@ index bba2836..f830781 100644
 +// The pair represents two counters, first for total accesses, second for
 +// misses
 +extern std::map<uint64_t, std::map<g_string, std::pair<uint64_t, uint64_t>>> perInstructionStats;
++extern std::map<uint64_t, uint64_t> perInstructionCycles;
 +extern std::map<uint64_t, std::string> InstructionsByAddress;
  
  //Process-wide global variables, defined in zsim.cpp
