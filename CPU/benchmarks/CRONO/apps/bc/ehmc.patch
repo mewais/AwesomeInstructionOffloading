@@ -1,0 +1,31 @@
+diff --git a/bc.cc b/bc.cc
+index f32f091..0c05ef5 100644
+--- a/bc.cc
++++ b/bc.cc
+@@ -131,6 +131,7 @@ void* do_work(void* args)
+       {   //Bellman Ford type
+          for(int i = 0; i < DEG; i++)
+          {
++             zsim_update_begin();
+              int Ewais1 = D[v]+W[v][i];
+              int Ewais2 = W_index[v][i];
+              if((D[Ewais2] > Ewais1))
+@@ -139,6 +140,7 @@ void* do_work(void* args)
+                 sigma[tid][Ewais2]++;
+              }
+             Q[v]=0;
++            zsim_update_end();
+          }
+       }
+    }
+@@ -328,8 +330,10 @@ int initialize_single_source(int*  D,
+ {
+    for(int i = 0; i < N+1; i++)
+    {
++      zsim_update_begin();
+       D[i] = INT_MAX;   //all distances infinite
+       Q[i] = 1;
++      zsim_update_end();
+    }
+ 
+    D[source] = 0;       //source distance 0

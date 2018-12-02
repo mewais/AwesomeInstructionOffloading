@@ -1,0 +1,51 @@
+diff --git a/triangle_counting_lock.cc b/triangle_counting_lock.cc
+index 733395a..0a4692c 100644
+--- a/triangle_counting_lock.cc
++++ b/triangle_counting_lock.cc
+@@ -93,7 +93,9 @@ void* do_work(void* args)
+       {
+          for(int i = 0; i < edges[v]; i++)
+          {
++            zsim_update_begin();
+             int neighbor = W_index[v][i];
++            zsim_update_end();
+             if(neighbor>=largest)
+                continue;
+             pthread_mutex_lock(&locks[neighbor]);
+@@ -105,35 +107,14 @@ void* do_work(void* args)
+    }
+ 
+    pthread_barrier_wait(arg->barrier_total);
+-   //printf("\n Done with First Phase");
+-   //for(int i=0;i<largest;i++)
+-   //{
+-   //   printf("\n %d",D[i]);
+-   //}
+ 
+    //Find triangles for each thread
+    for(v=start;v<stop;v++)
+    {
+       if(exist[v]==1)
+       {
+-				//if(v<50)
+-				//	printf("\n %d",D[v]);
+-         ////unsigned int ret = -1;
+-         //float ret = -1.0;
+          float temp = D[v];
+-         /*while (D[uu] != 0)
+-           {
+-           D[uu] >>= 1;
+-           ret++;
+-           }*/
+-         //ret = temp/3;
+-         ////D[v]=ret;
+-         ////if(D[v]>=1)
+-         //{
+-            //pthread_mutex_lock(&lock);
+-            Total_tid[tid] = Total_tid[tid]+temp;
+-            //pthread_mutex_unlock(&lock);
+-         //}
++         Total_tid[tid] = Total_tid[tid]+temp;
+       }
+    }
+    //printf("\n \n %f",Total_tid[tid]);

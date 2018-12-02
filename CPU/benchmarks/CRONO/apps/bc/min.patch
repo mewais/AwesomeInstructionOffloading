@@ -1,0 +1,19 @@
+diff --git a/bc.cc b/bc.cc
+index f32f091..1a45e68 100644
+--- a/bc.cc
++++ b/bc.cc
+@@ -133,11 +133,14 @@ void* do_work(void* args)
+          {
+              int Ewais1 = D[v]+W[v][i];
+              int Ewais2 = W_index[v][i];
++             zsim_update_begin();
+              if((D[Ewais2] > Ewais1))
+              {
+                 D[Ewais2] = Ewais1;
++                zsim_update_end();
+                 sigma[tid][Ewais2]++;
+              }
++             zsim_update_end();
+             Q[v]=0;
+          }
+       }

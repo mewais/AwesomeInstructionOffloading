@@ -1,0 +1,47 @@
+diff --git a/sssp.cc b/sssp.cc
+index 53a223f..dba7bda 100644
+--- a/sssp.cc
++++ b/sssp.cc
+@@ -90,28 +90,29 @@ void* do_work(void* args)
+       {
+          for(v=start;v<stop;v++)
+          {
+-
+             if(exist[v]==0)
++            {
+                continue;
++            }
+ 
+             for(int i = 0; i < DEG; i++)
+             {
++               int Ewais1 = W_index[v][i];
+                if(v<N)
+-                  neighbor = W_index[v][i];
++                  neighbor = Ewais1;
+ 
+                if(neighbor>=N)
+                   break;
+-               if((D[W_index[v][i]] > (D[v] + W[v][i]))) {     //Uncomment for test and test and set
+-
+-               pthread_mutex_lock(&locks[neighbor]);
+-               //if(v>=N)
+-               //	terminate=1;
+-               //relax
+-               if((D[W_index[v][i]] > (D[v] + W[v][i])))        //relax, update distance
+-                  D[W_index[v][i]] = D[v] + W[v][i];
+-               //Q[v]=0;
+-               pthread_mutex_unlock(&locks[neighbor]);
+-							}                                               //Uncomment for test and test and set
++               zsim_update_begin();
++               int Ewais2 = D[v] + W[v][i];
++               zsim_update_end();
++               if(D[Ewais1] > Ewais2)
++               {     //Uncomment for test and test and set
++                   pthread_mutex_lock(&locks[neighbor]);
++                   if(D[Ewais1] > Ewais2)
++                      D[Ewais1] = Ewais2;
++                   pthread_mutex_unlock(&locks[neighbor]);
++			   }                                               //Uncomment for test and test and set
+             }
+          }
+ 

@@ -1,0 +1,34 @@
+diff --git a/pagerank.cc b/pagerank.cc
+index 8d7d334..33e889f 100644
+--- a/pagerank.cc
++++ b/pagerank.cc
+@@ -103,19 +103,23 @@ void* do_work(void* args)
+       //Calculate Pageranks
+       for(v=i_start;v<i_stop;v++)
+       {
++         zsim_update_begin();
+          if(exist[v]==1)   //if vertex exists
+          {
+             pgtmp[v] = r;//dp + (r)/N_real;     //dangling pointer usage commented out
+-            //printf("\n pgtmp:%f test:%d",pgtmp[uu],test[uu]);
++            zsim_update_end();
+             for(int j=0;j<test[v];j++)
+             {
+-               //if inlink
+-               //printf("\nuu:%d id:%d",uu,W_index[uu][j]);
+-               pgtmp[v] = pgtmp[v] + (d*PR[W_index[v][j]]/outlinks[W_index[v][j]]);  //replace d with dp if dangling PRs required
++               int EwaisX = W_index[v][j];
++               double Ewais1 = d*PR[EwaisX];
++               double Ewais2 = (Ewais1/outlinks[EwaisX]);
++               pgtmp[v] = pgtmp[v] + Ewais2;
+             }
+          }
+-				 if(pgtmp[v]>=1.0)
+-					 pgtmp[v] = 1.0;
++         zsim_update_begin();
++		 if(pgtmp[v]>=1.0)
++			 pgtmp[v] = 1.0;
++         zsim_update_end();
+       }
+       //printf("\n Ranks done");
+ 

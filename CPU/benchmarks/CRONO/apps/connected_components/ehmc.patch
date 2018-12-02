@@ -1,0 +1,52 @@
+diff --git a/connected_components_lock.cc b/connected_components_lock.cc
+index 93dfbea..ad01e55 100644
+--- a/connected_components_lock.cc
++++ b/connected_components_lock.cc
+@@ -91,22 +91,27 @@ void* do_work(void* args)
+       iterations++;
+       for(v=start;v<stop;v++)                  //for each vertex
+       {
++         zsim_update_begin();
+          if(exist[v]==1)                       //if vertex exists
+          {
++            zsim_update_end();
+             for(int i = 0; i < edges[v]; i++)   //for each edge
+             {
++               zsim_update_begin();
+                int neighbor = W_index[v][i];
++               int Ewais = D[neighbor];
+                //pthread_mutex_lock(&locks[neighbor]);
+ 
+-               if((D[v] < D[neighbor]) && (D[neighbor] == D[D[neighbor]]))
++               if((D[v] < Ewais) && (Ewais == D[Ewais]))
+                {
+                   mod=1;                      //some change occured
+-                  D[D[neighbor]] = D[v];
++                  D[Ewais] = D[v];
+                }
+-
++               zsim_update_end();
+                //pthread_mutex_unlock(&locks[neighbor]);
+             }
+          }
++         zsim_update_end();
+       }
+       //printf("\n third phase");
+       if(tid==0)
+@@ -120,10 +125,14 @@ void* do_work(void* args)
+ 	  //Third phase, assign components
+       for(v=start;v<stop;v++)
+       {
+-         while(D[v] != D[D[v]])
++         zsim_update_begin();
++         int Ewais = D[v];
++         while(Ewais != D[Ewais])
+          {
+-            D[v] = D[D[v]];
++            D[v] = D[Ewais];
++            Ewais = D[v];
+          }
++         zsim_update_end();
+       }
+ 
+       //For termination Condition

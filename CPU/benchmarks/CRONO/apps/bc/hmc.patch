@@ -1,0 +1,30 @@
+diff --git a/bc.cc b/bc.cc
+index f32f091..48ebc1e 100644
+--- a/bc.cc
++++ b/bc.cc
+@@ -133,12 +133,14 @@ void* do_work(void* args)
+          {
+              int Ewais1 = D[v]+W[v][i];
+              int Ewais2 = W_index[v][i];
++             zsim_update_begin();
+              if((D[Ewais2] > Ewais1))
+              {
+                 D[Ewais2] = Ewais1;
+                 sigma[tid][Ewais2]++;
+              }
+             Q[v]=0;
++            zsim_update_end();
+          }
+       }
+    }
+@@ -328,8 +330,10 @@ int initialize_single_source(int*  D,
+ {
+    for(int i = 0; i < N+1; i++)
+    {
++      zsim_update_begin();
+       D[i] = INT_MAX;   //all distances infinite
+       Q[i] = 1;
++      zsim_update_end();
+    }
+ 
+    D[source] = 0;       //source distance 0

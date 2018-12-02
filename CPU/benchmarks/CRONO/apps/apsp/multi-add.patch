@@ -1,0 +1,17 @@
+diff --git a/apsp.cc b/apsp.cc
+index 2272403..7aa30a6 100644
+--- a/apsp.cc
++++ b/apsp.cc
+@@ -99,8 +99,10 @@ void* do_work(void* args)
+       {
+          for(int i = 0; i < DEG; i++)
+          {
+-             int Ewais1 = D[v]+W[v][i];
+-             int Ewais2 = W_index[v][i];
++            zsim_update_begin();
++            int Ewais1 = D[v]+W[v][i];
++            zsim_update_end();
++            int Ewais2 = W_index[v][i];
+ 
+             if((D[Ewais2] > Ewais1))
+                D[Ewais2] = Ewais1;

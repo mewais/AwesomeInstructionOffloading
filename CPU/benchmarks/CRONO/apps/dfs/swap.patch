@@ -1,0 +1,31 @@
+diff --git a/dfs.cc b/dfs.cc
+index b8b6b2d..0394042 100644
+--- a/dfs.cc
++++ b/dfs.cc
+@@ -111,18 +111,24 @@ void* do_work(void* args)
+         }//printf("\n %d",v);
+ 
+         if(exist[v]==0)
+-            continue;                              //if not in graph
++        {
++            continue;
++        }
++         zsim_update_begin();
+          pthread_mutex_lock(&locks[v]);
+          if(Q[v]==1)                       //if unset then set
+            Q[v]=0;
+          pthread_mutex_unlock(&locks[v]);
++         zsim_update_end();
+ 
+          for(int i = 0; i < edges[v]; i++)
+          {
+             int neighbor = W_index[v][i];
+ 
+             if(Q[neighbor]==0)
+-              continue;
++            {
++                continue;
++            }
+ 
+             stack[ptr] = neighbor;
+             if(ptr<((largest+1)/P))

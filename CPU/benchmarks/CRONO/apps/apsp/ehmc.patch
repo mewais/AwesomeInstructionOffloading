@@ -1,0 +1,33 @@
+diff --git a/apsp.cc b/apsp.cc
+index 2272403..0f8c499 100644
+--- a/apsp.cc
++++ b/apsp.cc
+@@ -99,13 +99,15 @@ void* do_work(void* args)
+       {
+          for(int i = 0; i < DEG; i++)
+          {
+-             int Ewais1 = D[v]+W[v][i];
+-             int Ewais2 = W_index[v][i];
++            zsim_update_begin();
++            int Ewais1 = D[v]+W[v][i];
++            int Ewais2 = W_index[v][i];
+ 
+             if((D[Ewais2] > Ewais1))
+                D[Ewais2] = Ewais1;
+ 
+             Q[v]=0; //Current vertex checked
++            zsim_update_end();
+          }
+       }
+    }
+@@ -233,8 +235,10 @@ int initialize_single_source(int*  D,
+ {
+    for(int i = 0; i < N+1; i++)
+    {
++      zsim_update_begin();
+       D[i] = INT_MAX;  //all distances infinite
+       Q[i] = 1;
++      zsim_update_end();
+    }
+ 
+    D[source] = 0;      //source distance 0

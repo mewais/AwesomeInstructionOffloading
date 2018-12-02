@@ -1,0 +1,41 @@
+diff --git a/community_lock.cc b/community_lock.cc
+index 77d8b79..df22bbb 100644
+--- a/community_lock.cc
++++ b/community_lock.cc
+@@ -116,8 +116,13 @@ void* do_work(void* args)
+          //v = v_test;
+          //printf(" %d ",v);
+          //pthread_mutex_unlock(&lock);
++         zsim_update_begin();
+          if(exist[v]==0)
++         {
++            zsim_update_end();
+             continue;
++         }
++         zsim_update_end();
+          for(i = 0; i < edges[v]; i++)
+          {
+             //pthread_mutex_lock(&locks[neighbor]);
+@@ -155,15 +160,22 @@ void* do_work(void* args)
+       //reconstruct
+       for(v=start;v<stop;v++)
+       {
++         zsim_update_begin();
+          if(exist[v]==0)
++         {
++            zsim_update_end();
+             continue;
++         }
++         zsim_update_end();
+          for(i=0;i<edges[v]-1;i++)
+          {
++            zsim_update_begin();
+             int neighbor = W_index[v][i];
+ 						//printf("\n %d",neighbor);
+             //pthread_mutex_lock(&locks[neighbor]);  //Fine Grained lock removed as neighbors are not being updated
+             //W_index[v][i] = comm[neighbor];
+             W_f[v][i] = comm[v] - comm[neighbor];
++            zsim_update_end();
+             //pthread_mutex_unlock(&locks[neighbor]);
+          }
+       }

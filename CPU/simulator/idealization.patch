@@ -1,0 +1,601 @@
+diff --git a/SConstruct b/SConstruct
+index 66f3a74..6359ca5 100644
+--- a/SConstruct
++++ b/SConstruct
+@@ -104,7 +104,7 @@ def buildSim(cppFlags, dir, type, pgo=None):
+     if not os.path.exists(pindwarfPath):
+         pindwarfLib = "pindwarf"
+ 
+-    env["PINLIBS"] = ["pin", "xed", pindwarfLib, "elf", "dl", "rt"]
++    env["PINLIBS"] = ["pin", "xed", pindwarfLib, "elf", "dl", "rt", "z"]
+ 
+     # Non-pintool libraries
+     env["LIBPATH"] = []
+diff --git a/misc/hooks/zsim_hooks.h b/misc/hooks/zsim_hooks.h
+index 3bf9178..62112cf 100644
+--- a/misc/hooks/zsim_hooks.h
++++ b/misc/hooks/zsim_hooks.h
+@@ -39,6 +39,16 @@ static inline void zsim_roi_end() {
+     printf("[" HOOKS_STR  "] ROI end\n");
+ }
+ 
++static inline void zsim_update_begin() {
++    __asm__ __volatile__ (".byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22 ;\n\t");
++    __asm__ __volatile__ ("" ::: "memory");
++}
++
++static inline void zsim_update_end() {
++    __asm__ __volatile__ (".byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x33 ;\n\t");
++    __asm__ __volatile__ ("" ::: "memory");
++}
++
+ static inline void zsim_heartbeat() {
+     zsim_magic_op(ZSIM_MAGIC_OP_HEARTBEAT);
+ }
+diff --git a/src/decoder.cpp b/src/decoder.cpp
+index d2aaf70..1c1ec97 100644
+--- a/src/decoder.cpp
++++ b/src/decoder.cpp
+@@ -1287,19 +1287,27 @@ BblInfo* Decoder::decodeBbl(BBL bbl, bool oooDecoding) {
+         std::vector<INS> instrDesc;
+ 
+         //Decode
++        USIZE TriggerSizes = 0;
+         for (INS ins = BBL_InsHead(bbl); INS_Valid(ins); ins = INS_Next(ins)) {
++            if(unlikely(INS_Opcode(ins) == XED_ICLASS_NOP && (INS_Disassemble(ins) == "nop dword ptr [rax+0x221100ff], eax" || INS_Disassemble(ins) == "nop dword ptr [rax+0x331100ff], eax")))
++            {
++                instrs--;
++                bytes -= INS_Size(ins);
++                TriggerSizes += INS_Size(ins);
++                continue;
++            }
+             bool inaccurate = false;
+             uint32_t prevUops = uopVec.size();
+             if (Decoder::canFuse(ins)) {
+                 inaccurate = Decoder::decodeFusedInstrs(ins, uopVec);
+-                instrAddr.push_back(INS_Address(ins));
++                instrAddr.push_back(INS_Address(ins) - TriggerSizes);
+                 instrBytes.push_back(INS_Size(ins));
+                 instrUops.push_back(uopVec.size() - prevUops);
+                 instrDesc.push_back(ins);
+ 
+                 ins = INS_Next(ins); //skip the JMP
+ 
+-                instrAddr.push_back(INS_Address(ins));
++                instrAddr.push_back(INS_Address(ins) - TriggerSizes);
+                 instrBytes.push_back(INS_Size(ins));
+                 instrUops.push_back(0);
+                 instrDesc.push_back(ins);
+@@ -1308,7 +1316,7 @@ BblInfo* Decoder::decodeBbl(BBL bbl, bool oooDecoding) {
+             } else {
+                 inaccurate = Decoder::decodeInstr(ins, uopVec);
+ 
+-                instrAddr.push_back(INS_Address(ins));
++                instrAddr.push_back(INS_Address(ins) - TriggerSizes);
+                 instrBytes.push_back(INS_Size(ins));
+                 instrUops.push_back(uopVec.size() - prevUops);
+                 instrDesc.push_back(ins);
+@@ -1349,12 +1357,15 @@ BblInfo* Decoder::decodeBbl(BBL bbl, bool oooDecoding) {
+         uint32_t pcnt = 0;
+         uint32_t pblk = 0;
+ 
+-        ADDRINT startAddr = (INS_Address(instrDesc[0]) >> 4) << 4;
++        // ADDRINT startAddr = (INS_Address(instrDesc[0]) >> 4) << 4;
++        ADDRINT startAddr = (instrAddr[0] >> 4) << 4;
+ 
+         for (uint32_t i = 0; i < instrs; i++) {
+-            INS ins = instrDesc[i];
+-            ADDRINT addr = INS_Address(ins);
+-            uint32_t bytes = INS_Size(ins);
++            // INS ins = instrDesc[i];
++            // ADDRINT addr = INS_Address(ins);
++            ADDRINT addr = instrAddr[i];
++            // uint32_t bytes = INS_Size(ins);
++            uint32_t bytes = instrBytes[i];
+             uint32_t block = (addr - startAddr) >> 4;
+             psz += bytes;
+             pcnt++;
+@@ -1485,4 +1496,3 @@ void Decoder::dumpBblProfile() {
+ }
+ 
+ #endif
+-
+diff --git a/src/decoder.h b/src/decoder.h
+index c0fe1cb..5d69a00 100644
+--- a/src/decoder.h
++++ b/src/decoder.h
+@@ -30,6 +30,8 @@
+ #include <vector>
+ #include "pin.H"
+ 
++#include "zsim.h"
++
+ // Uncomment to get a count of BBLs run. This is currently used to get a distribution of inaccurate instructions decoded that are actually run
+ // NOTE: This is not multiprocess-safe
+ // #define BBL_PROFILING
+diff --git a/src/filter_cache.h b/src/filter_cache.h
+index 9d1fb5e..dfbb011 100644
+--- a/src/filter_cache.h
++++ b/src/filter_cache.h
+@@ -60,6 +60,8 @@ class FilterCache : public Cache {
+ 
+         lock_t filterLock;
+         uint64_t fGETSHit, fGETXHit;
++        uint64_t fUpdate;
++        uint64_t fAllReqs;
+ 
+     public:
+         FilterCache(uint32_t _numSets, uint32_t _numLines, CC* _cc, CacheArray* _array,
+@@ -72,6 +74,8 @@ class FilterCache : public Cache {
+             for (uint32_t i = 0; i < numSets; i++) filterArray[i].clear();
+             futex_init(&filterLock);
+             fGETSHit = fGETXHit = 0;
++            fUpdate = 0;
++            fAllReqs = 0;
+             srcId = -1;
+             reqFlags = 0;
+         }
+@@ -92,18 +96,29 @@ class FilterCache : public Cache {
+             fgetsStat->init("fhGETS", "Filtered GETS hits", &fGETSHit);
+             ProxyStat* fgetxStat = new ProxyStat();
+             fgetxStat->init("fhGETX", "Filtered GETX hits", &fGETXHit);
++            ProxyStat* fUpdateStat = new ProxyStat();
++            fUpdateStat->init("fUpdate", "Filtered Update Ops", &fUpdate);
++            ProxyStat* fAllReqsStat = new ProxyStat();
++            fAllReqsStat->init("fAllReqs", "All Requests", &fAllReqs);
+             cacheStat->append(fgetsStat);
+             cacheStat->append(fgetxStat);
++            cacheStat->append(fUpdateStat);
++            cacheStat->append(fAllReqsStat);
+ 
+             initCacheStats(cacheStat);
+             parentStat->append(cacheStat);
+         }
+ 
+-        inline uint64_t load(Address vAddr, uint64_t curCycle) {
++        inline uint64_t load(Address vAddr, bool isUpdate, uint64_t curCycle) {
++            fAllReqs++;
+             Address vLineAddr = vAddr >> lineBits;
+             uint32_t idx = vLineAddr & setMask;
+             uint64_t availCycle = filterArray[idx].availCycle; //read before, careful with ordering to avoid timing races
+-            if (vLineAddr == filterArray[idx].rdAddr) {
++            if (isUpdate)
++            {
++                fUpdate++;
++                return MAX(curCycle, availCycle);
++            } else if (vLineAddr == filterArray[idx].rdAddr) {
+                 fGETSHit++;
+                 return MAX(curCycle, availCycle);
+             } else {
+@@ -111,11 +126,16 @@ class FilterCache : public Cache {
+             }
+         }
+ 
+-        inline uint64_t store(Address vAddr, uint64_t curCycle) {
++        inline uint64_t store(Address vAddr, bool isUpdate, uint64_t curCycle) {
++            fAllReqs++;
+             Address vLineAddr = vAddr >> lineBits;
+             uint32_t idx = vLineAddr & setMask;
+             uint64_t availCycle = filterArray[idx].availCycle; //read before, careful with ordering to avoid timing races
+-            if (vLineAddr == filterArray[idx].wrAddr) {
++            if (isUpdate)
++            {
++                fUpdate++;
++                return MAX(curCycle, availCycle);
++            } else if (vLineAddr == filterArray[idx].wrAddr) {
+                 fGETXHit++;
+                 //NOTE: Stores don't modify availCycle; we'll catch matches in the core
+                 //filterArray[idx].availCycle = curCycle; //do optimistic store-load forwarding
+diff --git a/src/init.cpp b/src/init.cpp
+index babbd12..3c1be50 100644
+--- a/src/init.cpp
++++ b/src/init.cpp
+@@ -879,6 +879,7 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
+     PreInitStats();
+ 
+     zinfo->traceDriven = config.get<bool>("sim.traceDriven", false);
++    zinfo->allowUpdate = config.get<bool>("sim.allowUpdate", false);
+ 
+     if (zinfo->traceDriven) {
+         zinfo->numCores = 0;
+@@ -1024,4 +1025,3 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
+     //Causes every other process to wake up
+     gm_set_glob_ptr(zinfo);
+ }
+-
+diff --git a/src/null_core.h b/src/null_core.h
+index 83619e7..0b432ae 100644
+--- a/src/null_core.h
++++ b/src/null_core.h
+@@ -59,6 +59,7 @@ class NullCore : public Core {
+         static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred);
+         static void PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred);
+ 
++
+         static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
+ } ATTR_LINE_ALIGNED; //This needs to take up a whole cache line, or false sharing will be extremely frequent
+ 
+diff --git a/src/ooo_core.cpp b/src/ooo_core.cpp
+index 4a2305e..34e4746 100644
+--- a/src/ooo_core.cpp
++++ b/src/ooo_core.cpp
+@@ -133,11 +133,13 @@ void OOOCore::contextSwitch(int32_t gid) {
+ 
+ InstrFuncPtrs OOOCore::GetFuncPtrs() {return {LoadFunc, StoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, FPTR_ANALYSIS, {0}};}
+ 
+-inline void OOOCore::load(Address addr) {
++inline void OOOCore::load(Address addr, bool isUpdate) {
++    loadUpdates[loads] = isUpdate;
+     loadAddrs[loads++] = addr;
+ }
+ 
+-void OOOCore::store(Address addr) {
++void OOOCore::store(Address addr, bool isUpdate) {
++    storeUpdates[stores] = isUpdate;
+     storeAddrs[stores++] = addr;
+ }
+ 
+@@ -265,10 +267,11 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+                     // Wait for all previous store addresses to be resolved
+                     dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
+ 
++                    bool update = loadUpdates[loadIdx];
+                     Address addr = loadAddrs[loadIdx++];
+                     uint64_t reqSatisfiedCycle = dispatchCycle;
+                     if (addr != ((Address)-1L)) {
+-                        reqSatisfiedCycle = l1d->load(addr, dispatchCycle) + L1D_LAT;
++                        reqSatisfiedCycle = l1d->load(addr, update, dispatchCycle) + L1D_LAT;
+                         cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
+                     }
+ 
+@@ -304,8 +307,9 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+                     // Wait for all previous store addresses to be resolved (not just ours :))
+                     dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
+ 
++                    bool update = storeUpdates[storeIdx];
+                     Address addr = storeAddrs[storeIdx++];
+-                    uint64_t reqSatisfiedCycle = l1d->store(addr, dispatchCycle) + L1D_LAT;
++                    uint64_t reqSatisfiedCycle = l1d->store(addr, update, dispatchCycle) + L1D_LAT;
+                     cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
+ 
+                     // Fill the forwarding table
+@@ -404,7 +408,7 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+         Address wrongPathAddr = branchTaken? branchNotTakenNpc : branchTakenNpc;
+         uint64_t reqCycle = fetchCycle;
+         for (uint32_t i = 0; i < 5*64/lineSize; i++) {
+-            uint64_t fetchLat = l1i->load(wrongPathAddr + lineSize*i, curCycle) - curCycle;
++            uint64_t fetchLat = l1i->load(wrongPathAddr + lineSize*i, false, curCycle) - curCycle;
+             cRec.record(curCycle, curCycle, curCycle + fetchLat);
+             uint64_t respCycle = reqCycle + fetchLat;
+             if (respCycle > lastCommitCycle) {
+@@ -425,7 +429,7 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+         // Do not model fetch throughput limit here, decoder-generated stalls already include it
+         // We always call fetches with curCycle to avoid upsetting the weave
+         // models (but we could move to a fetch-centric recorder to avoid this)
+-        uint64_t fetchLat = l1i->load(fetchAddr, curCycle) - curCycle;
++        uint64_t fetchLat = l1i->load(fetchAddr, false, curCycle) - curCycle;
+         cRec.record(curCycle, curCycle, curCycle + fetchLat);
+         fetchCycle += fetchLat;
+     }
+@@ -484,18 +488,18 @@ void OOOCore::advance(uint64_t targetCycle) {
+ 
+ // Pin interface code
+ 
+-void OOOCore::LoadFunc(THREADID tid, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->load(addr);}
+-void OOOCore::StoreFunc(THREADID tid, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->store(addr);}
++void OOOCore::LoadFunc(THREADID tid, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->load(addr, zinfo->Trigger[tid]);}
++void OOOCore::StoreFunc(THREADID tid, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->store(addr, zinfo->Trigger[tid]);}
+ 
+ void OOOCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+     OOOCore* core = static_cast<OOOCore*>(cores[tid]);
+-    if (pred) core->load(addr);
++    if (pred) core->load(addr, zinfo->Trigger[tid]);
+     else core->predFalseMemOp();
+ }
+ 
+ void OOOCore::PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+     OOOCore* core = static_cast<OOOCore*>(cores[tid]);
+-    if (pred) core->store(addr);
++    if (pred) core->store(addr, zinfo->Trigger[tid]);
+     else core->predFalseMemOp();
+ }
+ 
+diff --git a/src/ooo_core.h b/src/ooo_core.h
+index 9a59b81..aca9af7 100644
+--- a/src/ooo_core.h
++++ b/src/ooo_core.h
+@@ -36,7 +36,7 @@
+ #include "pad.h"
+ 
+ // Uncomment to enable stall stats
+-// #define OOO_STALL_STATS
++#define OOO_STALL_STATS
+ 
+ class FilterCache;
+ 
+@@ -372,7 +372,9 @@ class OOOCore : public Core {
+ 
+         //Record load and store addresses
+         Address loadAddrs[256];
++        bool loadUpdates[256];
+         Address storeAddrs[256];
++        bool storeUpdates[256];
+         uint32_t loads;
+         uint32_t stores;
+ 
+@@ -455,8 +457,8 @@ class OOOCore : public Core {
+         void cSimEnd();
+ 
+     private:
+-        inline void load(Address addr);
+-        inline void store(Address addr);
++        inline void load(Address addr, bool isUpdate);
++        inline void store(Address addr, bool isUpdate);
+ 
+         /* NOTE: Analysis routines cannot touch curCycle directly, must use
+          * advance() for long jumps or insWindow.advancePos() for 1-cycle
+diff --git a/src/simple_core.cpp b/src/simple_core.cpp
+index 5102faa..022a933 100644
+--- a/src/simple_core.cpp
++++ b/src/simple_core.cpp
+@@ -47,12 +47,12 @@ uint64_t SimpleCore::getPhaseCycles() const {
+     return curCycle % zinfo->phaseLength;
+ }
+ 
+-void SimpleCore::load(Address addr) {
+-    curCycle = l1d->load(addr, curCycle);
++void SimpleCore::load(Address addr, bool isUpdate) {
++    curCycle = l1d->load(addr, isUpdate, curCycle);
+ }
+ 
+-void SimpleCore::store(Address addr) {
+-    curCycle = l1d->store(addr, curCycle);
++void SimpleCore::store(Address addr, bool isUpdate) {
++    curCycle = l1d->store(addr, isUpdate, curCycle);
+ }
+ 
+ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+@@ -63,7 +63,7 @@ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+ 
+     Address endBblAddr = bblAddr + bblInfo->bytes;
+     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
+-        curCycle = l1i->load(fetchAddr, curCycle);
++        curCycle = l1i->load(fetchAddr, false, curCycle);
+     }
+ }
+ 
+@@ -93,19 +93,19 @@ InstrFuncPtrs SimpleCore::GetFuncPtrs() {
+ }
+ 
+ void SimpleCore::LoadFunc(THREADID tid, ADDRINT addr) {
+-    static_cast<SimpleCore*>(cores[tid])->load(addr);
++    static_cast<SimpleCore*>(cores[tid])->load(addr, zinfo->Trigger[tid]);
+ }
+ 
+ void SimpleCore::StoreFunc(THREADID tid, ADDRINT addr) {
+-    static_cast<SimpleCore*>(cores[tid])->store(addr);
++    static_cast<SimpleCore*>(cores[tid])->store(addr, zinfo->Trigger[tid]);
+ }
+ 
+ void SimpleCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+-    if (pred) static_cast<SimpleCore*>(cores[tid])->load(addr);
++    if (pred) static_cast<SimpleCore*>(cores[tid])->load(addr, zinfo->Trigger[tid]);
+ }
+ 
+ void SimpleCore::PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+-    if (pred) static_cast<SimpleCore*>(cores[tid])->store(addr);
++    if (pred) static_cast<SimpleCore*>(cores[tid])->store(addr, zinfo->Trigger[tid]);
+ }
+ 
+ void SimpleCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+diff --git a/src/simple_core.h b/src/simple_core.h
+index 8a3a143..8eae071 100644
+--- a/src/simple_core.h
++++ b/src/simple_core.h
+@@ -59,8 +59,8 @@ class SimpleCore : public Core {
+ 
+     protected:
+         //Simulation functions
+-        inline void load(Address addr);
+-        inline void store(Address addr);
++        inline void load(Address addr, bool isUpdate);
++        inline void store(Address addr, bool isUpdate);
+         inline void bbl(Address bblAddr, BblInfo* bblInstrs);
+ 
+         static void LoadFunc(THREADID tid, ADDRINT addr);
+@@ -69,6 +69,7 @@ class SimpleCore : public Core {
+         static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred);
+         static void PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred);
+ 
++
+         static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
+ }  ATTR_LINE_ALIGNED; //This needs to take up a whole cache line, or false sharing will be extremely frequent
+ 
+diff --git a/src/timing_core.cpp b/src/timing_core.cpp
+index 77b236b..b880c7f 100644
+--- a/src/timing_core.cpp
++++ b/src/timing_core.cpp
+@@ -77,15 +77,15 @@ void TimingCore::leave() {
+     cRec.notifyLeave(curCycle);
+ }
+ 
+-void TimingCore::loadAndRecord(Address addr) {
++void TimingCore::loadAndRecord(Address addr, bool isUpdate) {
+     uint64_t startCycle = curCycle;
+-    curCycle = l1d->load(addr, curCycle);
++    curCycle = l1d->load(addr, isUpdate, curCycle);
+     cRec.record(startCycle);
+ }
+ 
+-void TimingCore::storeAndRecord(Address addr) {
++void TimingCore::storeAndRecord(Address addr, bool isUpdate) {
+     uint64_t startCycle = curCycle;
+-    curCycle = l1d->store(addr, curCycle);
++    curCycle = l1d->store(addr, isUpdate, curCycle);
+     cRec.record(startCycle);
+ }
+ 
+@@ -96,7 +96,7 @@ void TimingCore::bblAndRecord(Address bblAddr, BblInfo* bblInfo) {
+     Address endBblAddr = bblAddr + bblInfo->bytes;
+     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
+         uint64_t startCycle = curCycle;
+-        curCycle = l1i->load(fetchAddr, curCycle);
++        curCycle = l1i->load(fetchAddr, false, curCycle);
+         cRec.record(startCycle);
+     }
+ }
+@@ -107,11 +107,11 @@ InstrFuncPtrs TimingCore::GetFuncPtrs() {
+ }
+ 
+ void TimingCore::LoadAndRecordFunc(THREADID tid, ADDRINT addr) {
+-    static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr);
++    static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr, zinfo->Trigger[tid]);
+ }
+ 
+ void TimingCore::StoreAndRecordFunc(THREADID tid, ADDRINT addr) {
+-    static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr);
++    static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, zinfo->Trigger[tid]);
+ }
+ 
+ void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+@@ -127,10 +127,10 @@ void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInf
+ }
+ 
+ void TimingCore::PredLoadAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+-    if (pred) static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr);
++    if (pred) static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr, zinfo->Trigger[tid]);
+ }
+ 
+ void TimingCore::PredStoreAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+-    if (pred) static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr);
++    if (pred) static_cast<TimingCore*>(cores[tid])->storeAndRecord(addr, zinfo->Trigger[tid]);
+ }
+ 
+diff --git a/src/timing_core.h b/src/timing_core.h
+index 79b54d8..297fccb 100644
+--- a/src/timing_core.h
++++ b/src/timing_core.h
+@@ -66,8 +66,8 @@ class TimingCore : public Core {
+         void cSimEnd() {curCycle = cRec.cSimEnd(curCycle);}
+ 
+     private:
+-        inline void loadAndRecord(Address addr);
+-        inline void storeAndRecord(Address addr);
++        inline void loadAndRecord(Address addr, bool isUpdate);
++        inline void storeAndRecord(Address addr, bool isUpdate);
+         inline void bblAndRecord(Address bblAddr, BblInfo* bblInstrs);
+         inline void record(uint64_t startCycle);
+ 
+@@ -77,6 +77,7 @@ class TimingCore : public Core {
+         static void PredLoadAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred);
+         static void PredStoreAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred);
+ 
++
+         static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
+ } ATTR_LINE_ALIGNED;
+ 
+diff --git a/src/zsim.cpp b/src/zsim.cpp
+index b62ed58..9c7bbb7 100644
+--- a/src/zsim.cpp
++++ b/src/zsim.cpp
+@@ -528,10 +528,19 @@ static void PrintIp(THREADID tid, ADDRINT ip) {
+ }
+ #endif
+ 
++VOID PIN_FAST_ANALYSIS_CALL BeginUpdateRegion (THREADID tid)
++{
++    zinfo->Trigger[tid] = true;
++}
++
++VOID PIN_FAST_ANALYSIS_CALL EndUpdateRegion (THREADID tid)
++{
++    zinfo->Trigger[tid] = false;
++}
++
+ VOID Instruction(INS ins) {
+     //Uncomment to print an instruction trace
+     //INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)PrintIp, IARG_THREAD_ID, IARG_REG_VALUE, REG_INST_PTR, IARG_END);
+-
+     if (!procTreeNode->isInFastForward() || !zinfo->ffReinstrument) {
+         AFUNPTR LoadFuncPtr = (AFUNPTR) IndirectLoadSingle;
+         AFUNPTR StoreFuncPtr = (AFUNPTR) IndirectStoreSingle;
+@@ -539,34 +548,42 @@ VOID Instruction(INS ins) {
+         AFUNPTR PredLoadFuncPtr = (AFUNPTR) IndirectPredLoadSingle;
+         AFUNPTR PredStoreFuncPtr = (AFUNPTR) IndirectPredStoreSingle;
+ 
+-        if (INS_IsMemoryRead(ins)) {
+-            if (!INS_IsPredicated(ins)) {
+-                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_END);
+-            } else {
+-                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_EXECUTING, IARG_END);
++        if(zinfo->allowUpdate && unlikely(INS_Opcode(ins) == XED_ICLASS_NOP && INS_Disassemble(ins) == "nop dword ptr [rax+0x221100ff], eax")) {
++            info ("Starting Update Region");
++            INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) BeginUpdateRegion, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_END);
++        } else if(zinfo->allowUpdate && unlikely(INS_Opcode(ins) == XED_ICLASS_NOP && INS_Disassemble(ins) == "nop dword ptr [rax+0x331100ff], eax")) {
++            info ("Ending Update Region");
++            INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) EndUpdateRegion, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_END);
++        } else {
++            if (INS_IsMemoryRead(ins)) {
++                if (!INS_IsPredicated(ins)) {
++                    INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_END);
++                } else {
++                    INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_EXECUTING, IARG_END);
++                }
+             }
+-        }
+ 
+-        if (INS_HasMemoryRead2(ins)) {
+-            if (!INS_IsPredicated(ins)) {
+-                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_END);
+-            } else {
+-                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_EXECUTING, IARG_END);
++            if (INS_HasMemoryRead2(ins)) {
++                if (!INS_IsPredicated(ins)) {
++                    INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_END);
++                } else {
++                    INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_EXECUTING, IARG_END);
++                }
+             }
+-        }
+ 
+-        if (INS_IsMemoryWrite(ins)) {
+-            if (!INS_IsPredicated(ins)) {
+-                INS_InsertCall(ins, IPOINT_BEFORE,  StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_END);
+-            } else {
+-                INS_InsertCall(ins, IPOINT_BEFORE,  PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_EXECUTING, IARG_END);
++            if (INS_IsMemoryWrite(ins)) {
++                if (!INS_IsPredicated(ins)) {
++                    INS_InsertCall(ins, IPOINT_BEFORE,  StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_END);
++                } else {
++                    INS_InsertCall(ins, IPOINT_BEFORE,  PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_EXECUTING, IARG_END);
++                }
+             }
+-        }
+ 
+-        // Instrument only conditional branches
+-        if (INS_Category(ins) == XED_CATEGORY_COND_BR) {
+-            INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) IndirectRecordBranch, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+-                    IARG_INST_PTR, IARG_BRANCH_TAKEN, IARG_BRANCH_TARGET_ADDR, IARG_FALLTHROUGH_ADDR, IARG_END);
++            // Instrument only conditional branches
++            if (INS_Category(ins) == XED_CATEGORY_COND_BR) {
++                INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) IndirectRecordBranch, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
++                        IARG_INST_PTR, IARG_BRANCH_TAKEN, IARG_BRANCH_TARGET_ADDR, IARG_FALLTHROUGH_ADDR, IARG_END);
++            }
+         }
+     }
+ 
+diff --git a/src/zsim.h b/src/zsim.h
+index bba2836..25a9b7b 100644
+--- a/src/zsim.h
++++ b/src/zsim.h
+@@ -180,7 +180,10 @@ struct GlobSimInfo {
+ 
+     // Trace-driven simulation (no cores)
+     bool traceDriven;
++    bool allowUpdate;
+     TraceDriver* traceDriver;
++
++    bool Trigger[MAX_THREADS];
+ };
+ 
+ 

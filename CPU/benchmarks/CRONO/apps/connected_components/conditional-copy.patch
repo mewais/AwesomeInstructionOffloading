@@ -1,0 +1,52 @@
+diff --git a/connected_components_lock.cc b/connected_components_lock.cc
+index 93dfbea..6bf9f3b 100644
+--- a/connected_components_lock.cc
++++ b/connected_components_lock.cc
+@@ -96,14 +96,16 @@ void* do_work(void* args)
+             for(int i = 0; i < edges[v]; i++)   //for each edge
+             {
+                int neighbor = W_index[v][i];
++               int Ewais = D[neighbor];
+                //pthread_mutex_lock(&locks[neighbor]);
+ 
+-               if((D[v] < D[neighbor]) && (D[neighbor] == D[D[neighbor]]))
++               zsim_update_begin();
++               if((D[v] < Ewais) && (Ewais == D[Ewais]))
+                {
+                   mod=1;                      //some change occured
+-                  D[D[neighbor]] = D[v];
++                  D[Ewais] = D[v];
+                }
+-
++               zsim_update_end();
+                //pthread_mutex_unlock(&locks[neighbor]);
+             }
+          }
+@@ -120,10 +122,16 @@ void* do_work(void* args)
+ 	  //Third phase, assign components
+       for(v=start;v<stop;v++)
+       {
+-         while(D[v] != D[D[v]])
++         int Ewais = D[v];
++         zsim_update_begin();
++         while(Ewais != D[Ewais])
+          {
+-            D[v] = D[D[v]];
++            D[v] = D[Ewais];
++            zsim_update_end();
++            Ewais = D[v];
++            zsim_update_begin();
+          }
++         zsim_update_end();
+       }
+ 
+       //For termination Condition
+@@ -427,7 +435,7 @@ int main(int argc, char** argv)
+       pthread_join(thread_handle[j],NULL);
+    }
+    zsim_roi_end();
+-   
++
+ 
+    // Disable Graphite performance and energy models
+    //CarbonDisableModels();

@@ -1,3 +1,16 @@
+diff --git a/SConstruct b/SConstruct
+index 66f3a74..6359ca5 100644
+--- a/SConstruct
++++ b/SConstruct
+@@ -104,7 +104,7 @@ def buildSim(cppFlags, dir, type, pgo=None):
+     if not os.path.exists(pindwarfPath):
+         pindwarfLib = "pindwarf"
+ 
+-    env["PINLIBS"] = ["pin", "xed", pindwarfLib, "elf", "dl", "rt"]
++    env["PINLIBS"] = ["pin", "xed", pindwarfLib, "elf", "dl", "rt", "z"]
+ 
+     # Non-pintool libraries
+     env["LIBPATH"] = []
 diff --git a/src/cache.cpp b/src/cache.cpp
 index 315e6bf..d513103 100644
 --- a/src/cache.cpp

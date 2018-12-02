@@ -17,6 +17,8 @@ do
     ../../../../simulator/zsim/build/opt/zsim run.cfg | grep "\[S 0\] PC" | cut -d " " -f 3- > run.out
     ## cleanup after run
     rm -f heartbeat zsim-* out.cfg core.* pin*
+    mv zsim.out instrumentation.out
+    mv zsim.h5 instrumentation.h5
     cd -
 done
 cd ../../
@@ -25,7 +27,7 @@ cd ../../
 cd simulator/zsim/
 scons -c
 rm -f core.*
-git reset --hard
+# git reset --hard
 cd -
 
 ## Cleanup benchmarks

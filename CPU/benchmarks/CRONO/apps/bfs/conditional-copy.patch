@@ -1,0 +1,47 @@
+diff --git a/bfs.cc b/bfs.cc
+index 499c9db..35e65da 100644
+--- a/bfs.cc
++++ b/bfs.cc
+@@ -91,11 +91,10 @@ void* do_work(void* args)
+    {
+       for(v=start;v<stop;v++)
+       {
+-         if(exist[v]==0)
+-            continue;                              //if not in graph
+-         //printf("\nv:%d Q:%d %d",v, Q[v], D[v]);
+-         if(D[v]==0 || D[v]==2)                    //already colored
++         if(exist[v]==0 || D[v]==0 || D[v]==2)
++         {
+             continue;
++         }
+          //printf("\nuu:%d Q:%d %d",v, Q[v], P);
+          //D[v]=2;
+ 
+@@ -108,7 +107,9 @@ void* do_work(void* args)
+             pthread_mutex_lock(&locks[neighbor]);
+             if(Q[neighbor]==1)                       //if unset then set
+                Q[neighbor]=0;                        //Can be set to Parent
++            zsim_update_begin();
+             temporary[neighbor] = 1;
++            zsim_update_end();
+             pthread_mutex_unlock(&locks[neighbor]);
+             }
+          }
+@@ -120,10 +121,17 @@ void* do_work(void* args)
+       //Update colors
+       for(v=start;v<stop;v++)
+       {
++         zsim_update_begin();
+          if(D[v]==1)
++         {
++           zsim_update_end();
+            D[v] = 2;
++         }
+          else
++         {
+            D[v] = temporary[v];
++           zsim_update_end();
++         }
+       }
+ 
+       //Termination Condition

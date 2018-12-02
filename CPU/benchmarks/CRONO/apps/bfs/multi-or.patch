@@ -1,0 +1,22 @@
+diff --git a/bfs.cc b/bfs.cc
+index 499c9db..c2f6966 100644
+--- a/bfs.cc
++++ b/bfs.cc
+@@ -91,11 +91,13 @@ void* do_work(void* args)
+    {
+       for(v=start;v<stop;v++)
+       {
+-         if(exist[v]==0)
+-            continue;                              //if not in graph
+-         //printf("\nv:%d Q:%d %d",v, Q[v], D[v]);
+-         if(D[v]==0 || D[v]==2)                    //already colored
++         zsim_update_begin();
++         if(exist[v]==0 || D[v]==0 || D[v]==2)
++         {
++            zsim_update_end();
+             continue;
++         }
++         zsim_update_end();
+          //printf("\nuu:%d Q:%d %d",v, Q[v], P);
+          //D[v]=2;
+ 
