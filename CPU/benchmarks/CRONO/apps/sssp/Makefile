@@ -20,7 +20,7 @@ sssp_outer: sssp_outer.cc
 sssp_outer_atomic: sssp_outer_atomic.cc
 
 clean:
-	rm -f $(TRGS) *.o *.dot
+	rm -f $(TRGS) *.o *.dot myfile.txt
 
 %: %.cc ;
 	$(CXX) $(CXXFLAGS) $< -o $@ $(LIBS)
