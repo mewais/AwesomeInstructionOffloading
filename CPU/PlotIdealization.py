@@ -19,9 +19,9 @@ HMCL3Misses = []
 EHMCL3Misses = []
 
 for Folder in Folders:
-    Clean = h5py.File(Folder + '/clean.h5', 'r')
-    HMC = h5py.File(Folder + '/hmc.h5', 'r')
-    EHMC = h5py.File(Folder + '/ehmc.h5', 'r')
+    Clean = h5py.File(Folder + '/ideal_clean.h5', 'r')
+    HMC = h5py.File(Folder + '/ideal_hmc.h5', 'r')
+    EHMC = h5py.File(Folder + '/ideal_ehmc.h5', 'r')
     Bench = Folder.split('/')[-1]
     BenchNames.append(Bench)
     CleanCycles.append(Clean['stats']['root']['beefy'][-1][0]['cycles'])

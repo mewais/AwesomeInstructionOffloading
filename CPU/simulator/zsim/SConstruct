@@ -140,6 +140,14 @@ def buildSim(cppFlags, dir, type, pgo=None):
         env["PINLIBS"] += ["dramsim"]
         env["CPPFLAGS"] += " -D_WITH_DRAMSIM_=1 "
 
+    if "CASHMCPATH" in os.environ:
+        CASHMCPATH = os.environ["CASHMCPATH"]
+        env["LINKFLAGS"] += " -Wl,-R" + CASHMCPATH
+        env["PINLIBPATH"] += [CASHMCPATH]
+        env["CPPPATH"] += [joinpath(CASHMCPATH, "sources")]
+        env["PINLIBS"] += ["cashmc"]
+        env["CPPFLAGS"] += " -D_WITH_CASHMC_=1 "
+
     env["CPPPATH"] += ["."]
 
     # HDF5

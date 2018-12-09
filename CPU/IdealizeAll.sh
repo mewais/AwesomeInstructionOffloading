@@ -16,15 +16,15 @@ for bench in apps/*/
 do
     cd $bench
     ## Apply each patch one by one
-    for patch in *.patch
+    for patch in ideal_*.patch
     do
         name="${patch%.*}"
         patch -p1 < $patch
         make
         ../../../../simulator/zsim/build/opt/zsim run.cfg
         rm -f heartbeat zsim-* out.cfg core.* pin*
-        mv zsim.out $name.out
-        mv zsim.h5 $name.h5
+        mv zsim.out ideal_$name.out
+        mv zsim.h5 ideal_$name.h5
         patch -p1 -R < $patch
     done
     cd -
@@ -38,12 +38,12 @@ for bench in apps/*/
 do
     cd $bench
     ## Apply each patch one by one
-    patch -p1 < ehmc.patch
+    patch -p1 < ideal_ehmc.patch
     make
     ../../../../simulator/zsim/build/opt/zsim run.cfg
     rm -f heartbeat zsim-* out.cfg core.* pin*
-    mv zsim.out clean.out
-    mv zsim.h5 clean.h5
+    mv zsim.out ideal_clean.out
+    mv zsim.h5 ideal_clean.h5
     patch -p1 -R < ehmc.patch
     cd -
 done

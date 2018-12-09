@@ -33,6 +33,7 @@
 #include <vector>
 #include "cache.h"
 #include "cache_arrays.h"
+#include "cashmc_mem_ctrl.h"
 #include "config.h"
 #include "constants.h"
 #include "contention_sim.h"
@@ -359,6 +360,12 @@ MemObject* BuildMemoryController(Config& config, uint32_t lineSize, uint32_t fre
         string outputDir = config.get<const char*>("sys.mem.outputDir");
         string traceName = config.get<const char*>("sys.mem.traceName");
         mem = new DRAMSimMemory(dramTechIni, dramSystemIni, outputDir, traceName, capacity, cpuFreqHz, latency, domain, name);
+    } else if (type == "CasHMC") {
+        string simIni = config.get<const char*>("sys.mem.simIni");
+        string dramIni = config.get<const char*>("sys.mem.dramIni");
+        uint32_t queueSize = config.get<uint32_t>("sys.mem.queueSize");
+        uint32_t burstSize = config.get<uint32_t>("sys.mem.burstSize");
+        mem = new CasHMCSimMemory(simIni, dramIni, queueSize, burstSize, 50, domain, name);
     } else if (type == "Detailed") {
         // FIXME(dsm): Don't use a separate config file... see DDRMemory
         g_string mcfg = config.get<const char*>("sys.mem.paramFile", "");
