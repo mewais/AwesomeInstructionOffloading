@@ -12,35 +12,210 @@ index eec0c87..df1a7a4 100644
      # Non-pintool libraries
      env["LIBPATH"] = []
 diff --git a/misc/hooks/zsim_hooks.h b/misc/hooks/zsim_hooks.h
-index 3bf9178..62112cf 100644
+index 3bf9178..62a49ba 100644
 --- a/misc/hooks/zsim_hooks.h
 +++ b/misc/hooks/zsim_hooks.h
-@@ -39,6 +39,16 @@ static inline void zsim_roi_end() {
-     printf("[" HOOKS_STR  "] ROI end\n");
- }
+@@ -46,4 +46,190 @@ static inline void zsim_heartbeat() {
+ static inline void zsim_work_begin() { zsim_magic_op(ZSIM_MAGIC_OP_WORK_BEGIN); }
+ static inline void zsim_work_end() { zsim_magic_op(ZSIM_MAGIC_OP_WORK_END); }
 
-+static inline void zsim_update_begin() {
-+    __asm__ __volatile__ (".byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22 ;\n\t");
-+    __asm__ __volatile__ ("" ::: "memory");
++/////////////////////////////////////////////////////////////////////////////
++/////////////////               HMC STUFF               /////////////////////
++/////////////////////////////////////////////////////////////////////////////
++// These are just for reference. Calling them from the benchmarks causes the
++// operands to be read before the triggers, converting those misses into hits
++// Copy and Paste.
++
++// Moves
++static inline void zsim_update_move(uint32_t mem, uint32_t value) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " mov %1, %0; \n\t"
++                : "=m" (mem)
++                : "r" (value)
++            );
 +}
 +
-+static inline void zsim_update_end() {
-+    __asm__ __volatile__ (".byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x33 ;\n\t");
-+    __asm__ __volatile__ ("" ::: "memory");
++static inline void zsim_update_move(int32_t mem, int32_t value) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " mov %1, %0; \n\t"
++                : "=m" (mem)
++                : "r" (value)
++            );
 +}
 +
- static inline void zsim_heartbeat() {
-     zsim_magic_op(ZSIM_MAGIC_OP_HEARTBEAT);
- }
++// Arithmetic Stuff
++static inline void zsim_update_incu(uint32_t mem) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " inc %0; \n\t"
++                : "+m" (mem)
++            );
++}
++
++static inline void zsim_update_incs(int32_t mem) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " inc %0; \n\t"
++                : "+m" (mem)
++            );
++}
++
++static inline void zsim_update_decu(uint32_t mem) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " dec %0; \n\t"
++                : "+m" (mem)
++            );
++}
++
++static inline void zsim_update_decs(int32_t mem) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " dec %0; \n\t"
++                : "+m" (mem)
++            );
++}
++
++static inline void zsim_update_addu(uint32_t mem, uint32_t reg) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " add %1, %0; \n\t"
++                : "=m" (mem)
++                : "g" (reg)
++            );
++}
++
++static inline void zsim_update_adds(int32_t mem, int32_t reg) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " add %1, %0; \n\t"
++                : "=m" (mem)
++                : "g" (reg)
++            );
++}
++
++static inline void zsim_update_subu(uint32_t mem, uint32_t reg) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " sub %1, %0; \n\t"
++                : "=m" (mem)
++                : "g" (reg)
++            );
++}
++
++static inline void zsim_update_subs(int32_t mem, int32_t reg) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " sub %1, %0; \n\t"
++                : "=m" (mem)
++                : "g" (reg)
++            );
++}
++
++// Logic Stuff
++static inline void zsim_update_not(uint32_t mem) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " not %0; \n\t"
++                : "+m" (mem)
++            );
++}
++
++static inline void zsim_update_and(uint32_t mem, uint32_t reg) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " and %1, %0; \n\t"
++                : "=m" (mem)
++                : "g" (reg)
++            );
++}
++
++static inline void zsim_update_or(uint32_t mem, uint32_t reg) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " or %1, %0; \n\t"
++                : "=m" (mem)
++                : "g" (reg)
++            );
++}
++
++static inline void zsim_update_xor(uint32_t mem, uint32_t reg) {
++    __asm__ __volatile__ (
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x22; \n\t"
++                " xor %1, %0; \n\t"
++                : "=m" (mem)
++                : "g" (reg)
++            );
++}
++
++// No NAND or NOR so far.
++
++// Min and Max
++static inline void zsim_update_minud(uint32_t mem, uint32_t reg) {
++    __asm__ __volatile__ (
++                " movd %1, %%xmm1; \n\t"
++                " movd %0, %%xmm0; \n\t"
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x33; \n\t"
++                " pminud %%xmm0, %%xmm1; \n\t"
++                " movd %%xmm1, %0; \n\t"
++                : "+m" (mem)
++                : "g" (reg)
++                : "xmm0", "xmm1"
++            );
++}
++
++static inline void zsim_update_minsd(int32_t mem, int32_t reg) {
++    __asm__ __volatile__ (
++                " movd %1, %%xmm1; \n\t"
++                " movd %0, %%xmm0; \n\t"
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x33; \n\t"
++                " pminsd %%xmm0, %%xmm1; \n\t"
++                " movd %%xmm1, %0; \n\t"
++                : "+m" (mem)
++                : "g" (reg)
++                : "xmm0", "xmm1"
++            );
++}
++
++static inline void zsim_update_maxud(uint32_t mem, uint32_t reg) {
++    __asm__ __volatile__ (
++                " movd %1, %%xmm1; \n\t"
++                " movd %0, %%xmm0; \n\t"
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x33; \n\t"
++                " pmaxud %%xmm0, %%xmm1; \n\t"
++                " movd %%xmm1, %0; \n\t"
++                : "+m" (mem)
++                : "g" (reg)
++                : "xmm0", "xmm1"
++            );
++}
++
++static inline void zsim_update_maxsd(int32_t mem, int32_t reg) {
++    __asm__ __volatile__ (
++                " movd %1, %%xmm1; \n\t"
++                " movd %0, %%xmm0; \n\t"
++                " .byte 0x0F, 0x1F, 0x80, 0xFF, 0x00, 0x11, 0x33; \n\t"
++                " pmaxsd %%xmm0, %%xmm1; \n\t"
++                " movd %%xmm1, %0; \n\t"
++                : "+m" (mem)
++                : "g" (reg)
++                : "xmm0", "xmm1"
++            );
++}
++
+ #endif /*__ZSIM_HOOKS_H__*/
 diff --git a/src/cache.cpp b/src/cache.cpp
-index 315e6bf..8864f8d 100644
+index 315e6bf..9b84656 100644
 --- a/src/cache.cpp
 +++ b/src/cache.cpp
-@@ -62,11 +62,12 @@ uint64_t Cache::access(MemReq& req) {
+@@ -62,12 +62,15 @@ uint64_t Cache::access(MemReq& req) {
      uint64_t respCycle = req.cycle;
      bool skipAccess = cc->startAccess(req); //may need to skip access due to races (NOTE: may change req.type!)
      if (likely(!skipAccess)) {
 -        bool updateReplacement = (req.type == GETS) || (req.type == GETX);
++        // info("%s: Recieved access of type: %s, %s to address %lu on cycle %lu", name.c_str(), AccessTypeName(req.type), AtomicTypeName(req.aType), req.addr, req.cycle);
 +        bool updateReplacement = (req.type == GETS) || (req.type == GETX) || (req.type == GETA) || (req.type == PUTA);
          int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement);
          respCycle += accLat;
@@ -49,21 +224,41 @@ index 315e6bf..8864f8d 100644
 +        if (lineId == -1 && req.aType == NONE && cc->shouldAllocate(req)) {
 +            // If read miss or plain write miss
              //Make space for new line
++            // info("\tRead or Plain Write Tag Miss");
              Address wbLineAddr;
              lineId = array->preinsert(req.lineAddr, &req, &wbLineAddr); //find the lineId to replace
-@@ -77,6 +78,10 @@ uint64_t Cache::access(MemReq& req) {
+             trace(Cache, "[%s] Evicting 0x%lx", name.c_str(), wbLineAddr);
+@@ -77,6 +80,28 @@ uint64_t Cache::access(MemReq& req) {
              cc->processEviction(req, wbLineAddr, lineId, respCycle); //1. if needed, send invalidates/downgrades to lower level
 
              array->postinsert(req.lineAddr, &req, lineId); //do the actual insertion. NOTE: Now we must split insert into a 2-phase thing because cc unlocks us.
 +        } else if (lineId != -1 && req.aType != NONE) {
-+            // if atomic write hit
-+            // Add delay for executing near cache
-+            respCycle += getDelayOfAtomic(req.aType);
++            if (cc->isExclusive(lineId)) {
++                // info("\tAtomic Write Hit on line %i", lineId);
++                // if atomic write hit
++                // Add delay for executing near cache
++                respCycle += getDelayOfAtomic(req.aType);
++                // Any update request other than MOV will access the cache twice.
++                // one to read, one to write updated value
++                respCycle += accLat;
++            } else {
++                // info("\tAtomic Write Tag Hit on line %i but State Miss", lineId);
++            }
++        } else {
++            if (lineId != -1) {
++                if (cc->isExclusive(lineId)) {
++                    // info("\tRead or Plain Write Hit on line %i", lineId);
++                } else {
++                    // info("\tRead or Plain Write Tag Hit on line %i but State Miss", lineId);
++                }
++            } else {
++                // info("\tAtomic Write Miss.");
++            }
          }
          // Enforce single-record invariant: Writeback access may have a timing
          // record. If so, read it.
 diff --git a/src/cashmc_mem_ctrl.cpp b/src/cashmc_mem_ctrl.cpp
-index b1df2fb..b634da7 100644
+index b1df2fb..3f0d6d6 100644
 --- a/src/cashmc_mem_ctrl.cpp
 +++ b/src/cashmc_mem_ctrl.cpp
 @@ -34,21 +34,38 @@
@@ -113,10 +308,10 @@ index b1df2fb..b634da7 100644
      memStats->init(name.c_str(), "Memory controller stats");
      profReads.init("rd", "Read requests"); memStats->append(&profReads);
      profWrites.init("wr", "Write requests"); memStats->append(&profWrites);
-+    profUpdates.init("wr", "Update requests"); memStats->append(&profUpdates);
++    profUpdates.init("up", "Update requests"); memStats->append(&profUpdates);
      profTotalRdLat.init("rdlat", "Total latency experienced by read requests"); memStats->append(&profTotalRdLat);
      profTotalWrLat.init("wrlat", "Total latency experienced by write requests"); memStats->append(&profTotalWrLat);
-+    profTotalUpLat.init("wrlat", "Total latency experienced by update requests"); memStats->append(&profTotalUpLat);
++    profTotalUpLat.init("uplat", "Total latency experienced by update requests"); memStats->append(&profTotalUpLat);
      parentStat->append(memStats);
  }
 
@@ -129,26 +324,59 @@ index b1df2fb..b634da7 100644
              *req.state = I;
              break;
          case GETS:
-@@ -124,9 +145,8 @@ uint64_t CasHMCSimMemory::access(MemReq& req) {
+@@ -123,12 +144,10 @@ uint64_t CasHMCSimMemory::access(MemReq& req) {
+     assert(respCycle > req.cycle);
 
      if ((req.type != PUTS /*discard clean writebacks*/) && zinfo->eventRecorders[req.srcId]) {
-         Address addr = req.lineAddr << lineBits;
+-        Address addr = req.lineAddr << lineBits;
 -        bool isWrite = (req.type == PUTX);
-         // info("ACCESS: New %s event for address %lu starting on cycle %lu", isWrite? "write":"read", addr, req.cycle);
+-        // info("ACCESS: New %s event for address %lu starting on cycle %lu", isWrite? "write":"read", addr, req.cycle);
 -        CasHMCSimAccEvent* memEv = new (zinfo->eventRecorders[req.srcId]) CasHMCSimAccEvent(this, isWrite, addr, domain);
-+        CasHMCSimAccEvent* memEv = new (zinfo->eventRecorders[req.srcId]) CasHMCSimAccEvent(this, req.type, req.aType, Waddr, domain);
++        // info("%s: ACCESS: New %s, %s event for address %lu starting on cycle %lu", name.c_str(), AccessTypeName(req.type), AtomicTypeName(req.aType), req.addr, req.cycle);
++        CasHMCSimAccEvent* memEv = new (zinfo->eventRecorders[req.srcId]) CasHMCSimAccEvent(this, req.type, req.aType, req.addr, domain);
          memEv->setMinStartCycle(req.cycle);
-         TimingRecord tr = {addr, req.cycle, respCycle, req.type, memEv, memEv};
+-        TimingRecord tr = {addr, req.cycle, respCycle, req.type, memEv, memEv};
++        TimingRecord tr = {req.addr, req.cycle, respCycle, req.type, memEv, memEv};
          zinfo->eventRecorders[req.srcId]->pushRecord(tr);
-@@ -145,7 +165,7 @@ uint32_t CasHMCSimMemory::tick(uint64_t cycle) {
+     }
+
+@@ -137,6 +156,7 @@ uint64_t CasHMCSimMemory::access(MemReq& req) {
+
+ uint32_t CasHMCSimMemory::tick(uint64_t cycle) {
+     dramCore->Update();
++    assert(cycle == curCycle);
+     curCycle++;
+     // info("TICK: Current Cycle = %lu", curCycle);
+     return 1;
+@@ -144,15 +164,15 @@ uint32_t CasHMCSimMemory::tick(uint64_t cycle) {
+
  void CasHMCSimMemory::enqueue(CasHMCSimAccEvent* ev, uint64_t cycle) {
      if (this->CanAcceptTran()) {
-         // info("ENQUEUE: The event on address %lu has been enqueued on cycle %lu", ev->getAddr(), cycle);
+-        // info("ENQUEUE: The event on address %lu has been enqueued on cycle %lu", ev->getAddr(), cycle);
 -        bool success = dramCore->ReceiveTran((ev->isWrite()? CasHMC::DATA_WRITE : CasHMC::DATA_READ), ev->getAddr(), burstSize);
++        // info("%s: ENQUEUE: The event on address %lu has been enqueued on cycle %lu", name.c_str(), ev->getAddr(), cycle);
 +        bool success = dramCore->ReceiveTran(typeTranslate(ev->getType(), ev->getAType()), ev->getAddr(), burstSize);
          assert(success);
          // FIXME: zsim uses virtual addresses while CasHMC needs physical. Hence
          // the anding
+-        inflightRequests.insert(std::pair<Address, CasHMCSimAccEvent*>(ev->getAddr() & 0xFFFFFFFF, ev));
++        inflightRequests.insert(std::pair<Address, CasHMCSimAccEvent*>(ev->getAddr() & 0xFFFFFFC0, ev));
+         ev->hold();
+     } else {
+-        // info("FAILED ENQUEUE: The event on address %lu has been delayed on cycle %lu", ev->getAddr(), cycle);
++        // info("%s: FAILED ENQUEUE: The event on address %lu has been delayed on cycle %lu", name.c_str(), ev->getAddr(), cycle);
+         waitingRequests.push_back(ev);
+         ev->hold();
+     }
+@@ -160,7 +180,7 @@ void CasHMCSimMemory::enqueue(CasHMCSimAccEvent* ev, uint64_t cycle) {
+ }
+
+ void CasHMCSimMemory::HMC_read_return_cb(uint64_t addr, uint64_t memCycle) {
+-    // info("CALLBACK: The event on address %lu has been finished on cycle %lu, %lu", addr, curCycle, memCycle);
++    // info("%s: CALLBACK: The event on address %lu has been finished on cycle %lu, %lu", name.c_str(), addr, curCycle, memCycle);
+
+     assert(memCycle == curCycle);
+     std::multimap<uint64_t, CasHMCSimAccEvent*>::iterator it = inflightRequests.find(addr);
 @@ -171,6 +191,9 @@ void CasHMCSimMemory::HMC_read_return_cb(uint64_t addr, uint64_t memCycle) {
      if (ev->isWrite()) {
          profWrites.inc();
@@ -159,16 +387,28 @@ index b1df2fb..b634da7 100644
      } else {
          profReads.inc();
          profTotalRdLat.inc(lat);
-@@ -185,7 +208,7 @@ void CasHMCSimMemory::HMC_read_return_cb(uint64_t addr, uint64_t memCycle) {
-         CasHMCSimAccEvent* ev = waitingRequests.front();
+@@ -181,16 +204,14 @@ void CasHMCSimMemory::HMC_read_return_cb(uint64_t addr, uint64_t memCycle) {
+     inflightRequests.erase(it);
+     //// info("[%s] %s access to %lx DONE at %ld (%ld cycles), %ld inflight reqs", getName(), it->second->isWrite()? "Write" : "Read", it->second->getAddr(), curCycle, curCycle-it->second->sCycle, inflightRequests.size());
 
-         // info("ENQUEUE: The event on address %lu has been enqueued on cycle %lu", ev->getAddr(), curCycle);
+-    while (this->CanAcceptTran() && !waitingRequests.empty()) {
++    while (!waitingRequests.empty() && this->CanAcceptTran()) {
+         CasHMCSimAccEvent* ev = waitingRequests.front();
+-
+-        // info("ENQUEUE: The event on address %lu has been enqueued on cycle %lu", ev->getAddr(), curCycle);
 -        bool success = dramCore->ReceiveTran((ev->isWrite()? CasHMC::DATA_WRITE : CasHMC::DATA_READ), ev->getAddr(), burstSize);
 +        bool success = dramCore->ReceiveTran(typeTranslate(ev->getType(), ev->getAType()), ev->getAddr(), burstSize);
          assert(success);
          // FIXME: zsim uses virtual addresses while CasHMC needs physical. Hence
          // the anding
-@@ -200,6 +223,46 @@ void CasHMCSimMemory::HMC_write_return_cb(uint64_t addr, uint64_t memCycle) {
+-        inflightRequests.insert(std::pair<Address, CasHMCSimAccEvent*>(ev->getAddr() & 0xFFFFFFFF, ev));
+-
++        inflightRequests.insert(std::pair<Address, CasHMCSimAccEvent*>(ev->getAddr() & 0xFFFFFFC0, ev));
++        // info("%s: REQUEUE: The event on address %lu has been enqueued on cycle %lu", name.c_str(), ev->getAddr(), curCycle);
+         waitingRequests.pop_front();
+     }
+ }
+@@ -200,6 +221,48 @@ void CasHMCSimMemory::HMC_write_return_cb(uint64_t addr, uint64_t memCycle) {
      HMC_read_return_cb(addr, memCycle);
  }
 
@@ -180,6 +420,8 @@ index b1df2fb..b634da7 100644
 +        return CasHMC::DATA_WRITE;
 +    } else if (type == PUTA || type == GETA) {
 +        switch (aType) {
++            case MOV:
++                return CasHMC::DATA_WRITE;
 +            case IADDI:
 +                return CasHMC::ATM_ADD16;
 +            case IMAXI:
@@ -231,7 +473,7 @@ index 23aa1f4..7d7b2d7 100644
 
      public:
 diff --git a/src/coherence_ctrls.cpp b/src/coherence_ctrls.cpp
-index 426f80a..db9b8f5 100644
+index 426f80a..1cf28ae 100644
 --- a/src/coherence_ctrls.cpp
 +++ b/src/coherence_ctrls.cpp
 @@ -26,6 +26,7 @@
@@ -247,14 +489,14 @@ index 426f80a..db9b8f5 100644
          case E:
              {
 -                MemReq req = {wbLineAddr, PUTS, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
-+                MemReq req = {wbLineAddr, PUTS, NONE, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
++                MemReq req = {wbLineAddr, wbLineAddr << lineBits, PUTS, NONE, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
                  respCycle = parents[getParentId(wbLineAddr)]->access(req);
              }
              break;
          case M:
              {
 -                MemReq req = {wbLineAddr, PUTX, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
-+                MemReq req = {wbLineAddr, PUTX, NONE, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
++                MemReq req = {wbLineAddr, wbLineAddr << lineBits, PUTX, NONE, selfId, state, cycle, &ccLock, *state, srcId, 0 /*no flags*/};
                  respCycle = parents[getParentId(wbLineAddr)]->access(req);
              }
              break;
@@ -263,7 +505,7 @@ index 426f80a..db9b8f5 100644
  }
 
 -uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags) {
-+uint64_t MESIBottomCC::processAccess(Address lineAddr, int32_t lineId, AccessType type, AtomType aType, uint64_t cycle, uint32_t srcId, uint32_t flags, bool& updateCancelled) {
++uint64_t MESIBottomCC::processAccess(Address lineAddr, Address addr, int32_t lineId, AccessType type, AtomType aType, uint64_t cycle, uint32_t srcId, uint32_t flags) {
      uint64_t respCycle = cycle;
 -    MESIState* state = &array[lineId];
 +    MESIState* state;
@@ -280,7 +522,7 @@ index 426f80a..db9b8f5 100644
          case PUTS: //Clean writeback, nothing to do (except profiling)
              assert(*state != I);
              profPUTS.inc();
-@@ -101,10 +109,88 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
+@@ -101,10 +109,62 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
              }
              profPUTX.inc();
              break;
@@ -292,53 +534,28 @@ index 426f80a..db9b8f5 100644
 +                    // Or if we have it shared, cannot do it here
 +                    // Forward to next level
 +                    uint32_t parentId = getParentId(lineAddr);
-+                    AccessType newType;
-+                    AtomType newAType;
-+                    if (*state == S && zinfo->allowUpdateCache == false) {
-+                        // If cache is not allowed to update, and we have this
-+                        // as shared, then parents definitely have it, act
-+                        // normally. convert this to GETX.
-+                        newType = GETX;
-+                        newAType = NONE;
-+                    } else {
-+                        newType = type;
-+                        newAType = aType;
-+                    }
-+                    MemReq req = {lineAddr, newType, newAType, selfId, state, cycle, &ccLock, *state, srcId, flags};
++                    MemReq req = {lineAddr, addr, type, aType, selfId, state, cycle, &ccLock, *state, srcId, flags};
 +                    uint32_t nextLevelLat = parents[parentId]->access(req) - cycle;
 +                    uint32_t netLat = parentRTTs[parentId];
-+                    if (newType == PUTA) {
-+                        // Latency not in the critical path
++                    if (type == PUTA) {
 +                        profPUTANextLevelLat.inc(nextLevelLat);
 +                        profPUTANetLat.inc(netLat);
 +                        profPUTAMiss.inc();
-+                    } else if (newType == GETA) {
++                    } else {
++                        assert(type == GETA);
 +                        profGETANextLevelLat.inc(nextLevelLat);
 +                        profGETANetLat.inc(netLat);
 +                        profGETAMiss.inc();
-+                        respCycle += nextLevelLat + netLat;
-+                    } else {
-+                        profGETNextLevelLat.inc(nextLevelLat);
-+                        profGETNetLat.inc(netLat);
-+                        if (*state == I) profGETXMissIM.inc();
-+                        else profGETXMissSM.inc();
-+                        profCanceledUpdate.inc();
-+                        updateCancelled = true;
 +                    }
++                    respCycle += nextLevelLat + netLat;
 +                } else if (*state == E || *state == M) {
 +                    // If we already have it exclusive, then just modify it
 +                    // here
 +                    *state = M;
-+                    if (zinfo->allowUpdateCache) {
-+                        if (type == PUTA) {
-+                            profPUTAHit.inc();
-+                        } else {
-+                            profGETAHit.inc();
-+                        }
++                    if (type == PUTA) {
++                        profPUTAHit.inc();
 +                    } else {
-+                        profGETXHit.inc();
-+                        profCanceledUpdate.inc();
-+                        updateCancelled = true;
++                        profGETAHit.inc();
 +                    }
 +                } else {
 +                    panic("WHAT?! Unknown state.");
@@ -346,11 +563,10 @@ index 426f80a..db9b8f5 100644
 +            } else {
 +                // if not. forward the request to next level
 +                uint32_t parentId = getParentId(lineAddr);
-+                MemReq req = {lineAddr, type, aType, selfId, state, cycle, &ccLock, *state, srcId, flags};
++                MemReq req = {lineAddr, addr, type, aType, selfId, state, cycle, &ccLock, *state, srcId, flags};
 +                uint32_t nextLevelLat = parents[parentId]->access(req) - cycle;
 +                uint32_t netLat = parentRTTs[parentId];
 +                if (type == PUTA) {
-+                    // Latency not in the critical path
 +                    profPUTANextLevelLat.inc(nextLevelLat);
 +                    profPUTANetLat.inc(netLat);
 +                    profPUTAMiss.inc();
@@ -358,33 +574,38 @@ index 426f80a..db9b8f5 100644
 +                    profGETANextLevelLat.inc(nextLevelLat);
 +                    profGETANetLat.inc(netLat);
 +                    profGETAMiss.inc();
-+                    respCycle += nextLevelLat + netLat;
 +                }
++                respCycle += nextLevelLat + netLat;
 +            }
 +            break;
          case GETS:
              if (*state == I) {
                  uint32_t parentId = getParentId(lineAddr);
 -                MemReq req = {lineAddr, GETS, selfId, state, cycle, &ccLock, *state, srcId, flags};
-+                MemReq req = {lineAddr, GETS, NONE, selfId, state, cycle, &ccLock, *state, srcId, flags};
++                MemReq req = {lineAddr, addr, GETS, NONE, selfId, state, cycle, &ccLock, *state, srcId, flags};
                  uint32_t nextLevelLat = parents[parentId]->access(req) - cycle;
                  uint32_t netLat = parentRTTs[parentId];
                  profGETNextLevelLat.inc(nextLevelLat);
-@@ -122,7 +208,7 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
+@@ -122,7 +182,7 @@ uint64_t MESIBottomCC::processAccess(Address lineAddr, uint32_t lineId, AccessTy
                  if (*state == I) profGETXMissIM.inc();
                  else profGETXMissSM.inc();
                  uint32_t parentId = getParentId(lineAddr);
 -                MemReq req = {lineAddr, GETX, selfId, state, cycle, &ccLock, *state, srcId, flags};
-+                MemReq req = {lineAddr, GETX, NONE, selfId, state, cycle, &ccLock, *state, srcId, flags};
++                MemReq req = {lineAddr, addr, GETX, NONE, selfId, state, cycle, &ccLock, *state, srcId, flags};
                  uint32_t nextLevelLat = parents[parentId]->access(req) - cycle;
                  uint32_t netLat = parentRTTs[parentId];
                  profGETNextLevelLat.inc(nextLevelLat);
-@@ -190,12 +276,20 @@ uint64_t MESIBottomCC::processNonInclusiveWriteback(Address lineAddr, AccessType
+@@ -186,16 +246,24 @@ void MESIBottomCC::processInval(Address lineAddr, uint32_t lineId, InvType type,
+ }
+
+
+-uint64_t MESIBottomCC::processNonInclusiveWriteback(Address lineAddr, AccessType type, uint64_t cycle, MESIState* state, uint32_t srcId, uint32_t flags) {
++uint64_t MESIBottomCC::processNonInclusiveWriteback(Address lineAddr, Address addr, AccessType type, uint64_t cycle, MESIState* state, uint32_t srcId, uint32_t flags) {
      if (!nonInclusiveHack) panic("Non-inclusive %s on line 0x%lx, this cache should be inclusive", AccessTypeName(type), lineAddr);
 
      //info("Non-inclusive wback, forwarding");
 -    MemReq req = {lineAddr, type, selfId, state, cycle, &ccLock, *state, srcId, flags | MemReq::NONINCLWB};
-+    MemReq req = {lineAddr, type, NONE, selfId, state, cycle, &ccLock, *state, srcId, flags | MemReq::NONINCLWB};
++    MemReq req = {lineAddr, addr, type, NONE, selfId, state, cycle, &ccLock, *state, srcId, flags | MemReq::NONINCLWB};
      uint64_t respCycle = parents[getParentId(lineAddr)]->access(req);
      return respCycle;
  }
@@ -401,12 +622,12 @@ index 426f80a..db9b8f5 100644
  /* MESITopCC implementation */
 
  void MESITopCC::init(const g_vector<BaseCache*>& _children, Network* network, const char* name) {
-@@ -258,12 +352,16 @@ uint64_t MESITopCC::processEviction(Address wbLineAddr, uint32_t lineId, bool* r
+@@ -258,12 +326,16 @@ uint64_t MESITopCC::processEviction(Address wbLineAddr, uint32_t lineId, bool* r
      }
  }
 
 -uint64_t MESITopCC::processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint32_t childId, bool haveExclusive,
-+uint64_t MESITopCC::processAccess(Address lineAddr, int32_t lineId, AccessType type, uint32_t childId, bool haveExclusive, bool updateCancelled,
++uint64_t MESITopCC::processAccess(Address lineAddr, Address addr, int32_t lineId, AccessType type, uint32_t childId, bool haveExclusive,
                                    MESIState* childState, bool* inducedWriteback, uint64_t cycle, uint32_t srcId, uint32_t flags) {
 -    Entry* e = &array[lineId];
 +    Entry* e = NULL;
@@ -420,7 +641,7 @@ index 426f80a..db9b8f5 100644
              assert(e->isExclusive());
              if (flags & MemReq::PUTX_KEEPEXCL) {
                  assert(e->sharers[childId]);
-@@ -273,12 +371,54 @@ uint64_t MESITopCC::processAccess(Address lineAddr, uint32_t lineId, AccessType
+@@ -273,12 +345,29 @@ uint64_t MESITopCC::processAccess(Address lineAddr, uint32_t lineId, AccessType
              }
              //note NO break in general
          case PUTS:
@@ -432,50 +653,25 @@ index 426f80a..db9b8f5 100644
              break;
 +        case PUTA:
 +        case GETA:
-+            if (!updateCancelled) {
-+                if (lineId != -1) {
-+                    // If we have the line exclusively then any children will be invalidated
-+                    if (e->isExclusive()) {
-+                        assert(haveExclusive);
-+                        respCycle = sendInvalidates(lineAddr, lineId, INV, inducedWriteback, cycle, srcId);
-+                        assert (e->numSharers == 0);
-+                        e->exclusive = false;
-+                        *childState = I;
-+                    }
-+                    // If we have it but it's shared, then our parent will invalidate us and our children together anyway.
++            if (lineId != -1) {
++                // If we have the line exclusively then any children will be invalidated
++                if (e->isExclusive()) {
++                    assert(haveExclusive);
++                    respCycle = sendInvalidates(lineAddr, lineId, INV, inducedWriteback, cycle, srcId);
++                    assert (e->numSharers == 0);
++                    e->exclusive = false;
++                    *childState = I;
 +                }
-+                // If we don't have the line, nothing to do for children.
-+            } else {
-+                // If cache not allowed to update, and  bottomCC have
-+                // converted this to a GETX. behave like a GETX.
-+                assert(haveExclusive); //the current cache better have exclusive access to this line
-+
-+                // If child is in sharers list (this is an upgrade miss), take it out
-+                if (e->sharers[childId]) {
-+                    assert_msg(!e->isExclusive(), "Spurious GETX, childId=%d numSharers=%d isExcl=%d excl=%d", childId, e->numSharers, e->isExclusive(), e->exclusive);
-+                    e->sharers[childId] = false;
-+                    e->numSharers--;
-+                }
-+
-+                // Invalidate all other copies
-+                respCycle = sendInvalidates(lineAddr, lineId, INV, inducedWriteback, cycle, srcId);
-+
-+                // Set current sharer, mark exclusive
-+                e->sharers[childId] = true;
-+                e->numSharers++;
-+                e->exclusive = true;
-+
-+                assert(e->numSharers == 1);
-+
-+                *childState = M; //give in M directly
++                // If we have it but it's shared, then our parent will invalidate us and our children together anyway.
 +            }
++            // If we don't have the line, nothing to do for children.
 +            break;
          case GETS:
 +            assert(e);
              if (e->isEmpty() && haveExclusive && !(flags & MemReq::NOEXCL)) {
                  //Give in E state
                  e->exclusive = true;
-@@ -303,6 +443,7 @@ uint64_t MESITopCC::processAccess(Address lineAddr, uint32_t lineId, AccessType
+@@ -303,6 +392,7 @@ uint64_t MESITopCC::processAccess(Address lineAddr, uint32_t lineId, AccessType
              }
              break;
          case GETX:
@@ -484,10 +680,18 @@ index 426f80a..db9b8f5 100644
 
              // If child is in sharers list (this is an upgrade miss), take it out
 diff --git a/src/coherence_ctrls.h b/src/coherence_ctrls.h
-index 2d2a1d0..085ddaf 100644
+index 2d2a1d0..6aa69b2 100644
 --- a/src/coherence_ctrls.h
 +++ b/src/coherence_ctrls.h
-@@ -89,10 +89,14 @@ class MESIBottomCC : public GlobAlloc {
+@@ -46,6 +46,7 @@ class CC : public GlobAlloc {
+         virtual void initStats(AggregateStat* cacheStat) = 0;
+
+         //Access methods; see Cache for call sequence
++        virtual bool isExclusive(int32_t lineId) = 0;
+         virtual bool startAccess(MemReq& req) = 0; //initial locking, address races; returns true if access should be skipped; may change req!
+         virtual bool shouldAllocate(const MemReq& req) = 0; //called when we don't find req's lineAddr in the array
+         virtual uint64_t processEviction(const MemReq& triggerReq, Address wbLineAddr, int32_t lineId, uint64_t startCycle) = 0; //called iff shouldAllocate returns true
+@@ -89,10 +90,13 @@ class MESIBottomCC : public GlobAlloc {
          //Profiling counters
          Counter profGETSHit, profGETSMiss, profGETXHit, profGETXMissIM /*from invalid*/, profGETXMissSM /*from S, i.e. upgrade misses*/;
          Counter profPUTS, profPUTX /*received from downstream*/;
@@ -498,7 +702,6 @@ index 2d2a1d0..085ddaf 100644
          Counter profGETNextLevelLat, profGETNetLat;
 +        Counter profPUTANextLevelLat, profPUTANetLat;
 +        Counter profGETANextLevelLat, profGETANetLat;
-+        Counter profCanceledUpdate;
 
          bool nonInclusiveHack;
 
@@ -513,7 +716,7 @@ index 2d2a1d0..085ddaf 100644
              profPUTS.init("PUTS", "Clean evictions (from lower level)");
              profPUTX.init("PUTX", "Dirty evictions (from lower level)");
              profINV.init("INV", "Invalidates (from upper level)");
-@@ -129,12 +137,21 @@ class MESIBottomCC : public GlobAlloc {
+@@ -129,12 +137,20 @@ class MESIBottomCC : public GlobAlloc {
              profFWD.init("FWD", "Forwards (from upper level)");
              profGETNextLevelLat.init("latGETnl", "GET request latency on next level");
              profGETNetLat.init("latGETnet", "GET request latency on network to next level");
@@ -521,7 +724,6 @@ index 2d2a1d0..085ddaf 100644
 +            profGETANetLat.init("latGETAnet", "GETA request latency on network to next level");
 +            profPUTANextLevelLat.init("latPUTAnl", "PUTA request latency on next level");
 +            profPUTANetLat.init("latPUTAnet", "PUTA request latency on network to next level");
-+            profCanceledUpdate.init("cancelledUpdate", "GETA/PUTA requests that changed to GETX");
 
              parentStat->append(&profGETSHit);
              parentStat->append(&profGETXHit);
@@ -535,7 +737,7 @@ index 2d2a1d0..085ddaf 100644
              parentStat->append(&profPUTS);
              parentStat->append(&profPUTX);
              parentStat->append(&profINV);
-@@ -142,11 +159,15 @@ class MESIBottomCC : public GlobAlloc {
+@@ -142,17 +158,23 @@ class MESIBottomCC : public GlobAlloc {
              parentStat->append(&profFWD);
              parentStat->append(&profGETNextLevelLat);
              parentStat->append(&profGETNetLat);
@@ -548,29 +750,80 @@ index 2d2a1d0..085ddaf 100644
          uint64_t processEviction(Address wbLineAddr, uint32_t lineId, bool lowerLevelWriteback, uint64_t cycle, uint32_t srcId);
 
 -        uint64_t processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint64_t cycle, uint32_t srcId, uint32_t flags);
-+        uint64_t processAccess(Address lineAddr, int32_t lineId, AccessType type, AtomType aType, uint64_t cycle, uint32_t srcId, uint32_t flags, bool& updateCancelled);
++        uint64_t processAccess(Address lineAddr, Address addr, int32_t lineId, AccessType type, AtomType aType, uint64_t cycle, uint32_t srcId, uint32_t flags);
 
          void processWritebackOnAccess(Address lineAddr, uint32_t lineId, AccessType type);
 
-@@ -154,6 +175,8 @@ class MESIBottomCC : public GlobAlloc {
+         void processInval(Address lineAddr, uint32_t lineId, InvType type, bool* reqWriteback);
 
-         uint64_t processNonInclusiveWriteback(Address lineAddr, AccessType type, uint64_t cycle, MESIState* state, uint32_t srcId, uint32_t flags);
-
-+        uint64_t processAtomicOffloading(MemReq& req);
+-        uint64_t processNonInclusiveWriteback(Address lineAddr, AccessType type, uint64_t cycle, MESIState* state, uint32_t srcId, uint32_t flags);
++        uint64_t processNonInclusiveWriteback(Address lineAddr, Address addr, AccessType type, uint64_t cycle, MESIState* state, uint32_t srcId, uint32_t flags);
 +
++        uint64_t processAtomicOffloading(MemReq& req);
+
          inline void lock() {
              futex_lock(&ccLock);
-         }
-@@ -222,7 +245,7 @@ class MESITopCC : public GlobAlloc {
+@@ -222,7 +244,7 @@ class MESITopCC : public GlobAlloc {
 
          uint64_t processEviction(Address wbLineAddr, uint32_t lineId, bool* reqWriteback, uint64_t cycle, uint32_t srcId);
 
 -        uint64_t processAccess(Address lineAddr, uint32_t lineId, AccessType type, uint32_t childId, bool haveExclusive,
-+        uint64_t processAccess(Address lineAddr, int32_t lineId, AccessType type, uint32_t childId, bool haveExclusive, bool updateCancelled,
++        uint64_t processAccess(Address lineAddr, Address addr, int32_t lineId, AccessType type, uint32_t childId, bool haveExclusive,
                  MESIState* childState, bool* inducedWriteback, uint64_t cycle, uint32_t srcId, uint32_t flags);
 
          uint64_t processInval(Address lineAddr, uint32_t lineId, InvType type, bool* reqWriteback, uint64_t cycle, uint32_t srcId);
-@@ -351,7 +374,7 @@ class MESICC : public CC {
+@@ -244,11 +266,11 @@ class MESITopCC : public GlobAlloc {
+         uint64_t sendInvalidates(Address lineAddr, uint32_t lineId, InvType type, bool* reqWriteback, uint64_t cycle, uint32_t srcId);
+ };
+
+-static inline bool CheckForMESIRace(AccessType& type, MESIState* state, MESIState initialState) {
++static inline bool CheckForMESIRace(Address lineAddr, AccessType& type, MESIState* state, MESIState initialState) {
+     //NOTE: THIS IS THE ONLY CODE THAT SHOULD DEAL WITH RACES. tcc, bcc et al should be written as if they were race-free.
+     bool skipAccess = false;
+     if (*state != initialState) {
+-        //info("[%s] Race on line 0x%lx, %s by childId %d, was state %s, now %s", name.c_str(), lineAddr, accessTypeNames[type], childId, mesiStateNames[initialState], mesiStateNames[*state]);
++        // info("[%s] Race on line 0x%lx, %s by childId %d, was state %s, now %s", name.c_str(), lineAddr, accessTypeNames[type], childId, mesiStateNames[initialState], mesiStateNames[*state]);
+         //An intervening invalidate happened! Two types of races:
+         if (type == PUTS || type == PUTX) { //either it is a PUT...
+             //We want to get rid of this line
+@@ -266,6 +288,12 @@ static inline bool CheckForMESIRace(AccessType& type, MESIState* state, MESIStat
+             assert(initialState == S);
+             assert(*state == I);
+             //Do nothing. This is still a valid GETX, only it is not an upgrade miss anymore
++        } else if (type == GETA || type == PUTA) {
++            info("Race on line %lu by a %s request. Was %s and now is %s", lineAddr, AccessTypeName(type), MESIStateName(initialState), MESIStateName(*state));
++            // TIn this case, the line moved from I to S or M. We do nothing
++            // because next level coherence ctrs handles this case for us.
++            assert(initialState == I);
++            assert(*state == M || *state == E || *state == S);
+         } else { //no GETSs can race with INVs, if we are doing a GETS it's because the line was invalid to begin with!
+             panic("Invalid true race happened (?)");
+         }
+@@ -302,9 +330,13 @@ class MESICC : public CC {
+             bcc->initStats(cacheStat);
+         }
+
++        bool isExclusive(int32_t lineId) {
++            return bcc->isExclusive(lineId);
++        }
++
+         //Access methods
+         bool startAccess(MemReq& req) {
+-            assert((req.type == GETS) || (req.type == GETX) || (req.type == PUTS) || (req.type == PUTX));
++            assert((req.type == GETS) || (req.type == GETX) || (req.type == GETA) || (req.type == PUTS) || (req.type == PUTX) || (req.type == PUTA));
+
+             /* Child should be locked when called. We do hand-over-hand locking when going
+              * down (which is why we require the lock), but not when going up, opening the
+@@ -320,7 +352,7 @@ class MESICC : public CC {
+             /* The situation is now stable, true race-wise. No one can touch the child state, because we hold
+              * both parent's locks. So, we first handle races, which may cause us to skip the access.
+              */
+-            bool skipAccess = CheckForMESIRace(req.type /*may change*/, req.state, req.initialState);
++            bool skipAccess = CheckForMESIRace(req.lineAddr, req.type /*may change*/, req.state, req.initialState);
+             return skipAccess;
+         }
+
+@@ -351,10 +383,10 @@ class MESICC : public CC {
              //invalidations. The alternative with this would be to capture these blocks, since we have space anyway. This is so rare is doesn't matter,
              //but if we do proper NI/EX mid-level caches backed by directories, this may start becoming more common (and it is perfectly acceptable to
              //upgrade without any interaction with the parent... the child had the permissions!)
@@ -578,14 +831,17 @@ index 2d2a1d0..085ddaf 100644
 +            if ((lineId == -1 || (((req.type == PUTS) || (req.type == PUTX)) && !bcc->isValid(lineId))) && req.aType == NONE) { //can only be a non-inclusive wback
                  assert(nonInclusiveHack);
                  assert((req.type == PUTS) || (req.type == PUTX));
-                 respCycle = bcc->processNonInclusiveWriteback(req.lineAddr, req.type, startCycle, req.state, req.srcId, req.flags);
-@@ -362,16 +385,18 @@ class MESICC : public CC {
+-                respCycle = bcc->processNonInclusiveWriteback(req.lineAddr, req.type, startCycle, req.state, req.srcId, req.flags);
++                respCycle = bcc->processNonInclusiveWriteback(req.lineAddr, req.addr, req.type, startCycle, req.state, req.srcId, req.flags);
+             } else {
+                 //Prefetches are side requests and get handled a bit differently
+                 bool isPrefetch = req.flags & MemReq::PREFETCH;
+@@ -362,16 +394,17 @@ class MESICC : public CC {
                  uint32_t flags = req.flags & ~MemReq::PREFETCH; //always clear PREFETCH, this flag cannot propagate up
 
                  //if needed, fetch line or upgrade miss from upper level
 -                respCycle = bcc->processAccess(req.lineAddr, lineId, req.type, startCycle, req.srcId, flags);
-+                bool updateCancelled = false;
-+                respCycle = bcc->processAccess(req.lineAddr, lineId, req.type, req.aType, startCycle, req.srcId, flags, updateCancelled);
++                respCycle = bcc->processAccess(req.lineAddr, req.addr, lineId, req.type, req.aType, startCycle, req.srcId, flags);
                  if (getDoneCycle) *getDoneCycle = respCycle;
                  if (!isPrefetch) { //prefetches only touch bcc; the demand request from the core will pull the line to lower level
                      //At this point, the line is in a good state w.r.t. upper levels
@@ -593,7 +849,7 @@ index 2d2a1d0..085ddaf 100644
                      //change directory info, invalidate other children if needed, tell requester about its state
 -                    respCycle = tcc->processAccess(req.lineAddr, lineId, req.type, req.childId, bcc->isExclusive(lineId), req.state,
 -                            &lowerLevelWriteback, respCycle, req.srcId, flags);
-+                    respCycle = tcc->processAccess(req.lineAddr, lineId, req.type, req.childId, lineId == -1? false : bcc->isExclusive(lineId), updateCancelled,
++                    respCycle = tcc->processAccess(req.lineAddr, req.addr, lineId, req.type, req.childId, lineId == -1? false : bcc->isExclusive(lineId),
 +                            req.state, &lowerLevelWriteback, respCycle, req.srcId, flags);
                      if (lowerLevelWriteback) {
                          //Essentially, if tcc induced a writeback, bcc may need to do an E->M transition to reflect that the cache now has dirty data
@@ -601,7 +857,31 @@ index 2d2a1d0..085ddaf 100644
                          bcc->processWritebackOnAccess(req.lineAddr, lineId, req.type);
                      }
                  }
-@@ -463,10 +488,13 @@ class MESITerminalCC : public CC {
+@@ -431,9 +464,13 @@ class MESITerminalCC : public CC {
+             bcc->initStats(cacheStat);
+         }
+
++        bool isExclusive(int32_t lineId) {
++            return bcc->isExclusive(lineId);
++        }
++
+         //Access methods
+         bool startAccess(MemReq& req) {
+-            assert((req.type == GETS) || (req.type == GETX)); //no puts!
++            assert((req.type == GETA) || (req.type == GETX) || (req.type == GETS) || (req.type == PUTA)); //no puts!
+
+             /* Child should be locked when called. We do hand-over-hand locking when going
+              * down (which is why we require the lock), but not when going up, opening the
+@@ -448,7 +485,7 @@ class MESITerminalCC : public CC {
+             /* The situation is now stable, true race-wise. No one can touch the child state, because we hold
+              * both parent's locks. So, we first handle races, which may cause us to skip the access.
+              */
+-            bool skipAccess = CheckForMESIRace(req.type /*may change*/, req.state, req.initialState);
++            bool skipAccess = CheckForMESIRace(req.lineAddr, req.type /*may change*/, req.state, req.initialState);
+             return skipAccess;
+         }
+
+@@ -463,10 +500,12 @@ class MESITerminalCC : public CC {
          }
 
          uint64_t processAccess(const MemReq& req, int32_t lineId, uint64_t startCycle,  uint64_t* getDoneCycle = nullptr) {
@@ -612,13 +892,12 @@ index 2d2a1d0..085ddaf 100644
              assert(!getDoneCycle);
              //if needed, fetch line or upgrade miss from upper level
 -            uint64_t respCycle = bcc->processAccess(req.lineAddr, lineId, req.type, startCycle, req.srcId, req.flags);
-+            bool updateCancelled = false;
-+            uint64_t respCycle = bcc->processAccess(req.lineAddr, lineId, req.type, req.aType, startCycle, req.srcId, req.flags, updateCancelled);
++            uint64_t respCycle = bcc->processAccess(req.lineAddr, req.addr, lineId, req.type, req.aType, startCycle, req.srcId, req.flags);
              //at this point, the line is in a good state w.r.t. upper levels
              return respCycle;
          }
 diff --git a/src/core.h b/src/core.h
-index 28f8f5c..7651cd5 100644
+index 28f8f5c..00d6664 100644
 --- a/src/core.h
 +++ b/src/core.h
 @@ -30,6 +30,7 @@
@@ -629,17 +908,20 @@ index 28f8f5c..7651cd5 100644
 
  struct BblInfo {
      uint32_t instrs;
-@@ -42,12 +43,12 @@ struct BblInfo {
+@@ -41,13 +42,13 @@ struct BblInfo {
+  * As an artifact of having a shared code cache, we need these to be the same for different core types.
   */
  struct InstrFuncPtrs {  // NOLINT(whitespace)
-     void (*loadPtr)(THREADID, ADDRINT);
+-    void (*loadPtr)(THREADID, ADDRINT);
 -    void (*storePtr)(THREADID, ADDRINT);
++    void (*loadPtr)(THREADID, ADDRINT, BOOL);
 +    void (*storePtr)(THREADID, ADDRINT, AtomType);
      void (*bblPtr)(THREADID, ADDRINT, BblInfo*);
      void (*branchPtr)(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT);
      // Same as load/store functions, but last arg indicated whether op is executing
-     void (*predLoadPtr)(THREADID, ADDRINT, BOOL);
+-    void (*predLoadPtr)(THREADID, ADDRINT, BOOL);
 -    void (*predStorePtr)(THREADID, ADDRINT, BOOL);
++    void (*predLoadPtr)(THREADID, ADDRINT, BOOL, BOOL);
 +    void (*predStorePtr)(THREADID, ADDRINT, AtomType, BOOL);
      uint64_t type;
      uint64_t pad[1];
@@ -659,6 +941,87 @@ index 8a335b3..41161e0 100644
          case GETS:
              *req.state = req.is(MemReq::NOEXCL)? S : E;
              break;
+diff --git a/src/decoder.cpp b/src/decoder.cpp
+index d2aaf70..1c1ec97 100644
+--- a/src/decoder.cpp
++++ b/src/decoder.cpp
+@@ -1287,19 +1287,27 @@ BblInfo* Decoder::decodeBbl(BBL bbl, bool oooDecoding) {
+         std::vector<INS> instrDesc;
+
+         //Decode
++        USIZE TriggerSizes = 0;
+         for (INS ins = BBL_InsHead(bbl); INS_Valid(ins); ins = INS_Next(ins)) {
++            if(unlikely(INS_Opcode(ins) == XED_ICLASS_NOP && (INS_Disassemble(ins) == "nop dword ptr [rax+0x221100ff], eax" || INS_Disassemble(ins) == "nop dword ptr [rax+0x331100ff], eax")))
++            {
++                instrs--;
++                bytes -= INS_Size(ins);
++                TriggerSizes += INS_Size(ins);
++                continue;
++            }
+             bool inaccurate = false;
+             uint32_t prevUops = uopVec.size();
+             if (Decoder::canFuse(ins)) {
+                 inaccurate = Decoder::decodeFusedInstrs(ins, uopVec);
+-                instrAddr.push_back(INS_Address(ins));
++                instrAddr.push_back(INS_Address(ins) - TriggerSizes);
+                 instrBytes.push_back(INS_Size(ins));
+                 instrUops.push_back(uopVec.size() - prevUops);
+                 instrDesc.push_back(ins);
+
+                 ins = INS_Next(ins); //skip the JMP
+
+-                instrAddr.push_back(INS_Address(ins));
++                instrAddr.push_back(INS_Address(ins) - TriggerSizes);
+                 instrBytes.push_back(INS_Size(ins));
+                 instrUops.push_back(0);
+                 instrDesc.push_back(ins);
+@@ -1308,7 +1316,7 @@ BblInfo* Decoder::decodeBbl(BBL bbl, bool oooDecoding) {
+             } else {
+                 inaccurate = Decoder::decodeInstr(ins, uopVec);
+
+-                instrAddr.push_back(INS_Address(ins));
++                instrAddr.push_back(INS_Address(ins) - TriggerSizes);
+                 instrBytes.push_back(INS_Size(ins));
+                 instrUops.push_back(uopVec.size() - prevUops);
+                 instrDesc.push_back(ins);
+@@ -1349,12 +1357,15 @@ BblInfo* Decoder::decodeBbl(BBL bbl, bool oooDecoding) {
+         uint32_t pcnt = 0;
+         uint32_t pblk = 0;
+
+-        ADDRINT startAddr = (INS_Address(instrDesc[0]) >> 4) << 4;
++        // ADDRINT startAddr = (INS_Address(instrDesc[0]) >> 4) << 4;
++        ADDRINT startAddr = (instrAddr[0] >> 4) << 4;
+
+         for (uint32_t i = 0; i < instrs; i++) {
+-            INS ins = instrDesc[i];
+-            ADDRINT addr = INS_Address(ins);
+-            uint32_t bytes = INS_Size(ins);
++            // INS ins = instrDesc[i];
++            // ADDRINT addr = INS_Address(ins);
++            ADDRINT addr = instrAddr[i];
++            // uint32_t bytes = INS_Size(ins);
++            uint32_t bytes = instrBytes[i];
+             uint32_t block = (addr - startAddr) >> 4;
+             psz += bytes;
+             pcnt++;
+@@ -1485,4 +1496,3 @@ void Decoder::dumpBblProfile() {
+ }
+
+ #endif
+-
+diff --git a/src/decoder.h b/src/decoder.h
+index c0fe1cb..5d69a00 100644
+--- a/src/decoder.h
++++ b/src/decoder.h
+@@ -30,6 +30,8 @@
+ #include <vector>
+ #include "pin.H"
+
++#include "zsim.h"
++
+ // Uncomment to get a count of BBLs run. This is currently used to get a distribution of inaccurate instructions decoded that are actually run
+ // NOTE: This is not multiprocess-safe
+ // #define BBL_PROFILING
 diff --git a/src/detailed_mem.cpp b/src/detailed_mem.cpp
 index 1cc3b6b..f88aa78 100644
 --- a/src/detailed_mem.cpp
@@ -690,7 +1053,7 @@ index 6622965..1552019 100644
              *req.state = req.is(MemReq::NOEXCL)? S : E;
              break;
 diff --git a/src/filter_cache.h b/src/filter_cache.h
-index 9d1fb5e..6de08d5 100644
+index 9d1fb5e..69dcd85 100644
 --- a/src/filter_cache.h
 +++ b/src/filter_cache.h
 @@ -60,6 +60,8 @@ class FilterCache : public Cache {
@@ -711,7 +1074,7 @@ index 9d1fb5e..6de08d5 100644
              srcId = -1;
              reqFlags = 0;
          }
-@@ -92,14 +96,21 @@ class FilterCache : public Cache {
+@@ -92,14 +96,23 @@ class FilterCache : public Cache {
              fgetsStat->init("fhGETS", "Filtered GETS hits", &fGETSHit);
              ProxyStat* fgetxStat = new ProxyStat();
              fgetxStat->init("fhGETX", "Filtered GETX hits", &fGETXHit);
@@ -728,17 +1091,20 @@ index 9d1fb5e..6de08d5 100644
              parentStat->append(cacheStat);
          }
 
-         inline uint64_t load(Address vAddr, uint64_t curCycle) {
+-        inline uint64_t load(Address vAddr, uint64_t curCycle) {
++        inline uint64_t load(Address vAddr, uint64_t curCycle, bool ignore) {
++            if (ignore)
++                return curCycle;
 +            fAllReqs++;
              Address vLineAddr = vAddr >> lineBits;
              uint32_t idx = vLineAddr & setMask;
              uint64_t availCycle = filterArray[idx].availCycle; //read before, careful with ordering to avoid timing races
-@@ -107,37 +118,48 @@ class FilterCache : public Cache {
+@@ -107,37 +120,48 @@ class FilterCache : public Cache {
                  fGETSHit++;
                  return MAX(curCycle, availCycle);
              } else {
 -                return replace(vLineAddr, idx, true, curCycle);
-+                return replace(vLineAddr, idx, true, NONE, curCycle);
++                return replace(vAddr, vLineAddr, idx, true, NONE, curCycle);
              }
          }
 
@@ -750,7 +1116,7 @@ index 9d1fb5e..6de08d5 100644
              uint64_t availCycle = filterArray[idx].availCycle; //read before, careful with ordering to avoid timing races
              if (vLineAddr == filterArray[idx].wrAddr) {
 -                fGETXHit++;
-+                if (aType != NONE) {
++                if (zinfo->allowUpdate && aType != NONE) {
 +                    fUpdate++;
 +                } else {
 +                    fGETXHit++;
@@ -760,25 +1126,25 @@ index 9d1fb5e..6de08d5 100644
                  return MAX(curCycle, availCycle);
              } else {
 -                return replace(vLineAddr, idx, false, curCycle);
-+                return replace(vLineAddr, idx, false, aType, curCycle);
++                if (zinfo->allowUpdate)
++                    return replace(vAddr, vLineAddr, idx, false, aType, curCycle);
++                else
++                    return replace(vAddr, vLineAddr, idx, false, NONE, curCycle);
              }
          }
 
 -        uint64_t replace(Address vLineAddr, uint32_t idx, bool isLoad, uint64_t curCycle) {
-+        uint64_t replace(Address vLineAddr, uint32_t idx, bool isLoad, AtomType aType, uint64_t curCycle) {
++        uint64_t replace(Address vAddr, Address vLineAddr, uint32_t idx, bool isLoad, AtomType aType, uint64_t curCycle) {
              Address pLineAddr = procMask | vLineAddr;
++            Address pAddr = procMask << lineBits | vAddr;
              MESIState dummyState = MESIState::I;
              futex_lock(&filterLock);
 -            MemReq req = {pLineAddr, isLoad? GETS : GETX, 0, &dummyState, curCycle, &filterLock, dummyState, srcId, reqFlags};
 -            uint64_t respCycle  = access(req);
 +            AccessType type = isLoad? GETS : getAccessTypeOfAtomic(aType);
-+            MemReq req = {pLineAddr, type, aType, 0, &dummyState, curCycle, &filterLock, dummyState, srcId, reqFlags};
-+            uint64_t respCycle;
-+            if (type == PUTA) {
-+                respCycle = MAX(curCycle, filterArray[idx].availCycle);
-+            } else {
-+                respCycle  = access(req);
-+            }
++            // info("f%s: Starting request of type %s, %s on line %lu at cycle %lu", name.c_str(), AccessTypeName(type), AtomicTypeName(aType), pLineAddr, curCycle);
++            MemReq req = {pLineAddr, pAddr, type, aType, 0, &dummyState, curCycle, &filterLock, dummyState, srcId, reqFlags};
++            uint64_t respCycle = access(req);
 
              //Due to the way we do the locking, at this point the old address might be invalidated, but we have the new address guaranteed until we release the lock
 
@@ -792,28 +1158,24 @@ index 9d1fb5e..6de08d5 100644
              //For LSU simulation purposes, loads bypass stores even to the same line if there is no conflict,
              //(e.g., st to x, ld from x+8) and we implement store-load forwarding at the core.
 diff --git a/src/init.cpp b/src/init.cpp
-index 9dc3b7b..684e2d4 100644
+index 9dc3b7b..238c7a4 100644
 --- a/src/init.cpp
 +++ b/src/init.cpp
-@@ -886,6 +886,11 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
+@@ -886,6 +886,7 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
      PreInitStats();
 
      zinfo->traceDriven = config.get<bool>("sim.traceDriven", false);
 +    zinfo->allowUpdate = config.get<bool>("sim.allowUpdate", false);
-+    zinfo->allowUpdateCache = config.get<bool>("sim.allowUpdateCache", false);
-+
-+    if (zinfo->allowUpdateCache && !zinfo->allowUpdate)
-+        panic("Cannot update caches without allowing update with HMC");
 
      if (zinfo->traceDriven) {
          zinfo->numCores = 0;
-@@ -1031,4 +1036,3 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
+@@ -1031,4 +1032,3 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
      //Causes every other process to wake up
      gm_set_glob_ptr(zinfo);
  }
 -
 diff --git a/src/memory_hierarchy.cpp b/src/memory_hierarchy.cpp
-index d696e41..e67fd73 100644
+index d696e41..1eff86e 100644
 --- a/src/memory_hierarchy.cpp
 +++ b/src/memory_hierarchy.cpp
 @@ -25,9 +25,10 @@
@@ -824,11 +1186,11 @@ index d696e41..e67fd73 100644
 +static const char* accessTypeNames[] = {"GETS", "GETX", "GETA", "PUTS", "PUTX", "PUTA"};
  static const char* invTypeNames[] = {"INV", "INVX"};
  static const char* mesiStateNames[] = {"I", "S", "E", "M"};
-+static const char* atomicTypeNames[] = {"NONE", "IADDI", "IMAXI", "IMINI", "CSEQI", "CSZI", "CEQI", "ANDI", "NANDI", "ORI", "NORI", "XORI", "IADD", "IMUL", "IDIV", "IMAX", "IMIN", "CSEQ", "CSZ", "CEQ", "AND", "NAND", "OR", "NOR", "XOR", "FADD", "FMUL", "FDIV"};
++static const char* atomicTypeNames[] = {"NONE", "MOV", "IADDI", "IMAXI", "IMINI", "CSEQI", "CSZI", "CEQI", "ANDI", "NANDI", "ORI", "NORI", "XORI", "IADD", "IMUL", "IDIV", "IMAX", "IMIN", "CSEQ", "CSZ", "CEQ", "AND", "NAND", "OR", "NOR", "XOR", "FADD", "FMUL", "FDIV"};
 
  const char* AccessTypeName(AccessType t) {
      assert_msg(t >= 0 && (size_t)t < sizeof(accessTypeNames)/sizeof(const char*), "AccessTypeName got an out-of-range input, %d", t);
-@@ -44,6 +45,90 @@ const char* MESIStateName(MESIState s) {
+@@ -44,6 +45,92 @@ const char* MESIStateName(MESIState s) {
      return mesiStateNames[s];
  }
 
@@ -841,6 +1203,7 @@ index d696e41..e67fd73 100644
 +    // TODO: Are number realistic?
 +    switch (t) {
 +        case NONE:
++        case MOV:
 +            return 0;
 +        case IADDI:
 +        case IMAXI:
@@ -882,6 +1245,7 @@ index d696e41..e67fd73 100644
 +    switch (t) {
 +        case NONE:
 +            return GETX;
++        case MOV:
 +        case IADDI:
 +        case IMAXI:
 +        case IMINI:
@@ -920,10 +1284,10 @@ index d696e41..e67fd73 100644
 
  static inline void CompileTimeAsserts() {
 diff --git a/src/memory_hierarchy.h b/src/memory_hierarchy.h
-index a399bf6..ea96419 100644
+index a399bf6..7523cf2 100644
 --- a/src/memory_hierarchy.h
 +++ b/src/memory_hierarchy.h
-@@ -44,10 +44,59 @@ typedef uint64_t Address;
+@@ -44,10 +44,60 @@ typedef uint64_t Address;
  typedef enum {
      GETS, // get line, exclusive permission not needed (triggered by a processor load)
      GETX, // get line, exclusive permission needed (triggered by a processor store o atomic access)
@@ -940,6 +1304,7 @@ index a399bf6..ea96419 100644
 +typedef enum {
 +    NONE,
 +    // HMC Operations
++    MOV,
 +    // NOTE: HMC Supports those operations on 8 and 16 byte granularities
 +    // only (int64_t and int128_t), but I assume they can be for any integer
 +    // data type
@@ -984,7 +1349,7 @@ index a399bf6..ea96419 100644
  /* Types of Invalidation. An Invalidation is a request issued from upper to lower
   * levels of the hierarchy.
   */
-@@ -69,6 +118,10 @@ typedef enum {
+@@ -69,15 +119,21 @@ typedef enum {
  const char* AccessTypeName(AccessType t);
  const char* InvTypeName(InvType t);
  const char* MESIStateName(MESIState s);
@@ -993,54 +1358,71 @@ index a399bf6..ea96419 100644
 +uint32_t getDelayOfAtomic(AtomType t);
 +AccessType getAccessTypeOfAtomic(AtomType t);
 
- inline bool IsGet(AccessType t) { return t == GETS || t == GETX; }
- inline bool IsPut(AccessType t) { return t == PUTS || t == PUTX; }
-@@ -78,6 +131,7 @@ inline bool IsPut(AccessType t) { return t == PUTS || t == PUTX; }
+-inline bool IsGet(AccessType t) { return t == GETS || t == GETX; }
+-inline bool IsPut(AccessType t) { return t == PUTS || t == PUTX; }
++inline bool IsGet(AccessType t) { return t == GETS || t == GETX || t == GETA; }
++inline bool IsPut(AccessType t) { return t == PUTS || t == PUTX || t == PUTA; }
+
+
+ /* Memory request */
  struct MemReq {
      Address lineAddr;
++    Address addr;           // Full address, needed because HMC update ops are not on a line granularity.
      AccessType type;
 +    AtomType aType;
      uint32_t childId;
      MESIState* state;
      uint64_t cycle; //cycle where request arrives at component
 diff --git a/src/null_core.cpp b/src/null_core.cpp
-index 06d83c4..81e6463 100644
+index 06d83c4..7544756 100644
 --- a/src/null_core.cpp
 +++ b/src/null_core.cpp
-@@ -63,9 +63,9 @@ InstrFuncPtrs NullCore::GetFuncPtrs() {
+@@ -62,10 +62,10 @@ InstrFuncPtrs NullCore::GetFuncPtrs() {
+     return {LoadFunc, StoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, FPTR_ANALYSIS, {0}};
  }
 
- void NullCore::LoadFunc(THREADID tid, ADDRINT addr) {}
+-void NullCore::LoadFunc(THREADID tid, ADDRINT addr) {}
 -void NullCore::StoreFunc(THREADID tid, ADDRINT addr) {}
-+void NullCore::StoreFunc(THREADID tid, ADDRINT addr, AtomType aType) {}
- void NullCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {}
+-void NullCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {}
 -void NullCore::PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred) {}
++void NullCore::LoadFunc(THREADID tid, ADDRINT addr, BOOL ignore) {}
++void NullCore::StoreFunc(THREADID tid, ADDRINT addr, AtomType aType) {}
++void NullCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL ignore, BOOL pred) {}
 +void NullCore::PredStoreFunc(THREADID tid, ADDRINT addr, AtomType aType, BOOL pred) {}
 
  void NullCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
      NullCore* core = static_cast<NullCore*>(cores[tid]);
 diff --git a/src/null_core.h b/src/null_core.h
-index 83619e7..2b59748 100644
+index 83619e7..68b2712 100644
 --- a/src/null_core.h
 +++ b/src/null_core.h
-@@ -54,10 +54,10 @@ class NullCore : public Core {
+@@ -53,11 +53,11 @@ class NullCore : public Core {
+     protected:
          inline void bbl(BblInfo* bblInstrs);
 
-         static void LoadFunc(THREADID tid, ADDRINT addr);
+-        static void LoadFunc(THREADID tid, ADDRINT addr);
 -        static void StoreFunc(THREADID tid, ADDRINT addr);
++        static void LoadFunc(THREADID tid, ADDRINT addr, BOOL ignore);
 +        static void StoreFunc(THREADID tid, ADDRINT addr, AtomType aType);
          static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
-         static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred);
+-        static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred);
 -        static void PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred);
++        static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL ignore, BOOL pred);
 +        static void PredStoreFunc(THREADID tid, ADDRINT addr, AtomType aType, BOOL pred);
 
          static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
  } ATTR_LINE_ALIGNED; //This needs to take up a whole cache line, or false sharing will be extremely frequent
 diff --git a/src/ooo_core.cpp b/src/ooo_core.cpp
-index 4a2305e..503555c 100644
+index 4a2305e..814e827 100644
 --- a/src/ooo_core.cpp
 +++ b/src/ooo_core.cpp
-@@ -137,8 +137,9 @@ inline void OOOCore::load(Address addr) {
+@@ -133,12 +133,14 @@ void OOOCore::contextSwitch(int32_t gid) {
+
+ InstrFuncPtrs OOOCore::GetFuncPtrs() {return {LoadFunc, StoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, FPTR_ANALYSIS, {0}};}
+
+-inline void OOOCore::load(Address addr) {
++inline void OOOCore::load(Address addr, bool ignore) {
++    loadIgnores[loads] = ignore;
      loadAddrs[loads++] = addr;
  }
 
@@ -1052,7 +1434,20 @@ index 4a2305e..503555c 100644
  }
 
  // Predicated loads and stores call this function, gets recorded as a 0-cycle op.
-@@ -304,8 +305,9 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+@@ -265,10 +267,11 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+                     // Wait for all previous store addresses to be resolved
+                     dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
+
++                    bool ignore = loadIgnores[loadIdx];
+                     Address addr = loadAddrs[loadIdx++];
+                     uint64_t reqSatisfiedCycle = dispatchCycle;
+                     if (addr != ((Address)-1L)) {
+-                        reqSatisfiedCycle = l1d->load(addr, dispatchCycle) + L1D_LAT;
++                        reqSatisfiedCycle = l1d->load(addr, dispatchCycle, ignore) + L1D_LAT;
+                         cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
+                     }
+
+@@ -304,8 +307,9 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
                      // Wait for all previous store addresses to be resolved (not just ours :))
                      dispatchCycle = MAX(lastStoreAddrCommitCycle+1, dispatchCycle);
 
@@ -1064,16 +1459,38 @@ index 4a2305e..503555c 100644
                      cRec.record(curCycle, dispatchCycle, reqSatisfiedCycle);
 
                      // Fill the forwarding table
-@@ -485,7 +487,7 @@ void OOOCore::advance(uint64_t targetCycle) {
+@@ -404,7 +408,7 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+         Address wrongPathAddr = branchTaken? branchNotTakenNpc : branchTakenNpc;
+         uint64_t reqCycle = fetchCycle;
+         for (uint32_t i = 0; i < 5*64/lineSize; i++) {
+-            uint64_t fetchLat = l1i->load(wrongPathAddr + lineSize*i, curCycle) - curCycle;
++            uint64_t fetchLat = l1i->load(wrongPathAddr + lineSize*i, curCycle, false) - curCycle;
+             cRec.record(curCycle, curCycle, curCycle + fetchLat);
+             uint64_t respCycle = reqCycle + fetchLat;
+             if (respCycle > lastCommitCycle) {
+@@ -425,7 +429,7 @@ inline void OOOCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+         // Do not model fetch throughput limit here, decoder-generated stalls already include it
+         // We always call fetches with curCycle to avoid upsetting the weave
+         // models (but we could move to a fetch-centric recorder to avoid this)
+-        uint64_t fetchLat = l1i->load(fetchAddr, curCycle) - curCycle;
++        uint64_t fetchLat = l1i->load(fetchAddr, curCycle, false) - curCycle;
+         cRec.record(curCycle, curCycle, curCycle + fetchLat);
+         fetchCycle += fetchLat;
+     }
+@@ -484,18 +488,18 @@ void OOOCore::advance(uint64_t targetCycle) {
+
  // Pin interface code
 
- void OOOCore::LoadFunc(THREADID tid, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->load(addr);}
+-void OOOCore::LoadFunc(THREADID tid, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->load(addr);}
 -void OOOCore::StoreFunc(THREADID tid, ADDRINT addr) {static_cast<OOOCore*>(cores[tid])->store(addr);}
++void OOOCore::LoadFunc(THREADID tid, ADDRINT addr, BOOL ignore) {static_cast<OOOCore*>(cores[tid])->load(addr, ignore);}
 +void OOOCore::StoreFunc(THREADID tid, ADDRINT addr, AtomType aType) {static_cast<OOOCore*>(cores[tid])->store(addr, aType);}
 
- void OOOCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+-void OOOCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {
++void OOOCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL ignore, BOOL pred) {
      OOOCore* core = static_cast<OOOCore*>(cores[tid]);
-@@ -493,9 +495,9 @@ void OOOCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+-    if (pred) core->load(addr);
++    if (pred) core->load(addr, ignore);
      else core->predFalseMemOp();
  }
 
@@ -1086,40 +1503,47 @@ index 4a2305e..503555c 100644
  }
 
 diff --git a/src/ooo_core.h b/src/ooo_core.h
-index 9a59b81..861d732 100644
+index 9a59b81..d0cdcf1 100644
 --- a/src/ooo_core.h
 +++ b/src/ooo_core.h
-@@ -373,6 +373,7 @@ class OOOCore : public Core {
+@@ -372,7 +372,9 @@ class OOOCore : public Core {
+
          //Record load and store addresses
          Address loadAddrs[256];
++        bool loadIgnores[256];
          Address storeAddrs[256];
 +        AtomType atomTypes[256];
          uint32_t loads;
          uint32_t stores;
 
-@@ -456,7 +457,7 @@ class OOOCore : public Core {
+@@ -455,8 +457,8 @@ class OOOCore : public Core {
+         void cSimEnd();
 
      private:
-         inline void load(Address addr);
+-        inline void load(Address addr);
 -        inline void store(Address addr);
++        inline void load(Address addr, bool ignore);
 +        inline void store(Address addr, AtomType aType);
 
          /* NOTE: Analysis routines cannot touch curCycle directly, must use
           * advance() for long jumps or insWindow.advancePos() for 1-cycle
-@@ -477,9 +478,9 @@ class OOOCore : public Core {
+@@ -476,10 +478,10 @@ class OOOCore : public Core {
+
          inline void bbl(Address bblAddr, BblInfo* bblInfo);
 
-         static void LoadFunc(THREADID tid, ADDRINT addr);
+-        static void LoadFunc(THREADID tid, ADDRINT addr);
 -        static void StoreFunc(THREADID tid, ADDRINT addr);
-+        static void StoreFunc(THREADID tid, ADDRINT addr, AtomType aType);
-         static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred);
+-        static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred);
 -        static void PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred);
++        static void LoadFunc(THREADID tid, ADDRINT addr, BOOL ignore);
++        static void StoreFunc(THREADID tid, ADDRINT addr, AtomType aType);
++        static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL ignore, BOOL pred);
 +        static void PredStoreFunc(THREADID tid, ADDRINT addr, AtomType aType, BOOL pred);
          static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
          static void BranchFunc(THREADID tid, ADDRINT pc, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc);
  } ATTR_LINE_ALIGNED;  // Take up an int number of cache lines
 diff --git a/src/prefetcher.cpp b/src/prefetcher.cpp
-index b440c4c..eb979e6 100644
+index b440c4c..00ea8b6 100644
 --- a/src/prefetcher.cpp
 +++ b/src/prefetcher.cpp
 @@ -138,7 +138,7 @@ uint64_t StreamPrefetcher::access(MemReq& req) {
@@ -1127,16 +1551,22 @@ index b440c4c..eb979e6 100644
                  if (prefetchPos < 64 && !e.valid[prefetchPos]) {
                      MESIState state = I;
 -                    MemReq pfReq = {req.lineAddr + prefetchPos - pos, GETS, req.childId, &state, reqCycle, req.childLock, state, req.srcId, MemReq::PREFETCH};
-+                    MemReq pfReq = {req.lineAddr + prefetchPos - pos, GETS, NONE, req.childId, &state, reqCycle, req.childLock, state, req.srcId, MemReq::PREFETCH};
++                    MemReq pfReq = {req.lineAddr + prefetchPos - pos, (req.lineAddr + prefetchPos - pos) << 6, GETS, NONE, req.childId, &state, reqCycle, req.childLock, state, req.srcId, MemReq::PREFETCH};
                      uint64_t pfRespCycle = parent->access(pfReq);  // FIXME, might segfault
                      e.valid[prefetchPos] = true;
                      e.times[prefetchPos].fill(reqCycle, pfRespCycle);
 diff --git a/src/simple_core.cpp b/src/simple_core.cpp
-index 5102faa..fc7e00a 100644
+index 5102faa..6afcc03 100644
 --- a/src/simple_core.cpp
 +++ b/src/simple_core.cpp
-@@ -51,8 +51,8 @@ void SimpleCore::load(Address addr) {
-     curCycle = l1d->load(addr, curCycle);
+@@ -47,12 +47,12 @@ uint64_t SimpleCore::getPhaseCycles() const {
+     return curCycle % zinfo->phaseLength;
+ }
+
+-void SimpleCore::load(Address addr) {
+-    curCycle = l1d->load(addr, curCycle);
++void SimpleCore::load(Address addr, bool ignore) {
++    curCycle = l1d->load(addr, curCycle, ignore);
  }
 
 -void SimpleCore::store(Address addr) {
@@ -1146,8 +1576,23 @@ index 5102faa..fc7e00a 100644
  }
 
  void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
-@@ -96,16 +96,16 @@ void SimpleCore::LoadFunc(THREADID tid, ADDRINT addr) {
-     static_cast<SimpleCore*>(cores[tid])->load(addr);
+@@ -63,7 +63,7 @@ void SimpleCore::bbl(Address bblAddr, BblInfo* bblInfo) {
+
+     Address endBblAddr = bblAddr + bblInfo->bytes;
+     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
+-        curCycle = l1i->load(fetchAddr, curCycle);
++        curCycle = l1i->load(fetchAddr, curCycle, false);
+     }
+ }
+
+@@ -92,20 +92,20 @@ InstrFuncPtrs SimpleCore::GetFuncPtrs() {
+     return {LoadFunc, StoreFunc, BblFunc, BranchFunc, PredLoadFunc, PredStoreFunc, FPTR_ANALYSIS, {0}};
+ }
+
+-void SimpleCore::LoadFunc(THREADID tid, ADDRINT addr) {
+-    static_cast<SimpleCore*>(cores[tid])->load(addr);
++void SimpleCore::LoadFunc(THREADID tid, ADDRINT addr, BOOL ignore) {
++    static_cast<SimpleCore*>(cores[tid])->load(addr, ignore);
  }
 
 -void SimpleCore::StoreFunc(THREADID tid, ADDRINT addr) {
@@ -1156,8 +1601,10 @@ index 5102faa..fc7e00a 100644
 +    static_cast<SimpleCore*>(cores[tid])->store(addr, aType);
  }
 
- void SimpleCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {
-     if (pred) static_cast<SimpleCore*>(cores[tid])->load(addr);
+-void SimpleCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+-    if (pred) static_cast<SimpleCore*>(cores[tid])->load(addr);
++void SimpleCore::PredLoadFunc(THREADID tid, ADDRINT addr, BOOL ignore, BOOL pred) {
++    if (pred) static_cast<SimpleCore*>(cores[tid])->load(addr, ignore);
  }
 
 -void SimpleCore::PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred) {
@@ -1168,61 +1615,312 @@ index 5102faa..fc7e00a 100644
 
  void SimpleCore::BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
 diff --git a/src/simple_core.h b/src/simple_core.h
-index 8a3a143..fd1051a 100644
+index 8a3a143..cf9be98 100644
 --- a/src/simple_core.h
 +++ b/src/simple_core.h
-@@ -60,14 +60,14 @@ class SimpleCore : public Core {
+@@ -59,15 +59,15 @@ class SimpleCore : public Core {
+
      protected:
          //Simulation functions
-         inline void load(Address addr);
+-        inline void load(Address addr);
 -        inline void store(Address addr);
++        inline void load(Address addr, bool ignore);
 +        inline void store(Address addr, AtomType aType);
          inline void bbl(Address bblAddr, BblInfo* bblInstrs);
 
-         static void LoadFunc(THREADID tid, ADDRINT addr);
+-        static void LoadFunc(THREADID tid, ADDRINT addr);
 -        static void StoreFunc(THREADID tid, ADDRINT addr);
++        static void LoadFunc(THREADID tid, ADDRINT addr, BOOL ignore);
 +        static void StoreFunc(THREADID tid, ADDRINT addr, AtomType aType);
          static void BblFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
-         static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred);
+-        static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL pred);
 -        static void PredStoreFunc(THREADID tid, ADDRINT addr, BOOL pred);
++        static void PredLoadFunc(THREADID tid, ADDRINT addr, BOOL ignore, BOOL pred);
 +        static void PredStoreFunc(THREADID tid, ADDRINT addr, AtomType aType, BOOL pred);
 
          static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
  }  ATTR_LINE_ALIGNED; //This needs to take up a whole cache line, or false sharing will be extremely frequent
 diff --git a/src/timing_cache.cpp b/src/timing_cache.cpp
-index be43a28..b5a9fca 100644
+index be43a28..54b6a17 100644
 --- a/src/timing_cache.cpp
 +++ b/src/timing_cache.cpp
-@@ -123,11 +123,11 @@ uint64_t TimingCache::access(MemReq& req) {
+@@ -41,6 +41,17 @@ class HitEvent : public TimingEvent {
+         }
+ };
+
++class UpdateEvent : public TimingEvent {
++    private:
++        TimingCache* cache;
++
++    public:
++        UpdateEvent(TimingCache* _cache,  uint32_t postDelay, int32_t domain) : TimingEvent(0, postDelay, domain), cache(_cache) {}
++
++        void simulate(uint64_t startCycle) {
++            cache->simulateUpdate(this, startCycle);
++        }
++};
+
+ class MissStartEvent : public TimingEvent {
+     private:
+@@ -102,10 +113,12 @@ void TimingCache::initStats(AggregateStat* parentStat) {
+     profHitLat.init("latHit", "Cumulative latency accesses that hit (demand and non-demand)");
+     profMissRespLat.init("latMissResp", "Cumulative latency for miss start to response");
+     profMissLat.init("latMiss", "Cumulative latency for miss start to finish (free MSHR)");
++    profUpdateLat.init("latUp", "Cumulative latency access that update");
+
+     cacheStat->append(&profHitLat);
+     cacheStat->append(&profMissRespLat);
+     cacheStat->append(&profMissLat);
++    cacheStat->append(&profUpdateLat);
+
+     parentStat->append(cacheStat);
+ }
+@@ -123,14 +136,18 @@ uint64_t TimingCache::access(MemReq& req) {
      uint64_t respCycle = req.cycle;
      bool skipAccess = cc->startAccess(req); //may need to skip access due to races (NOTE: may change req.type!)
      if (likely(!skipAccess)) {
 -        bool updateReplacement = (req.type == GETS) || (req.type == GETX);
++        // info("%s: Recieved access of type: %s, %s to address %lu on cycle %lu", name.c_str(), AccessTypeName(req.type), AtomicTypeName(req.aType), req.addr, req.cycle);
 +        bool updateReplacement = (req.type == GETS) || (req.type == GETX) || (req.type == GETA) || (req.type == PUTA);
          int32_t lineId = array->lookup(req.lineAddr, &req, updateReplacement);
          respCycle += accLat;
 
 -        if (lineId == -1 /*&& cc->shouldAllocate(req)*/) {
++        bool hit = false;
++        bool update = false;
 +        if (lineId == -1 && req.aType == NONE /*&& cc->shouldAllocate(req)*/) {
              assert(cc->shouldAllocate(req)); //dsm: for now, we don't deal with non-inclusion in TimingCache
-
+-
++            // If read miss or plain write miss
              //Make space for new line
-@@ -142,6 +142,10 @@ uint64_t TimingCache::access(MemReq& req) {
++            // info("\tRead or Plain Write Tag Miss");
+             Address wbLineAddr;
+             lineId = array->preinsert(req.lineAddr, &req, &wbLineAddr); //find the lineId to replace
+             trace(Cache, "[%s] Evicting 0x%lx", name.c_str(), wbLineAddr);
+@@ -142,17 +159,84 @@ uint64_t TimingCache::access(MemReq& req) {
              array->postinsert(req.lineAddr, &req, lineId); //do the actual insertion. NOTE: Now we must split insert into a 2-phase thing because cc unlocks us.
 
              if (evRec->hasRecord()) writebackRecord = evRec->popRecord();
 +        } else if (lineId != -1 && req.aType != NONE) {
-+            // if atomic write hit
-+            // Add delay for executing near cache
-+            respCycle += getDelayOfAtomic(req.aType);
++            if (cc->isExclusive(lineId)) {
++                hit = true;
++                // info("\tAtomic Write Hit on line %i", lineId);
++                // if atomic write hit
++                // Add delay for executing near cache
++                respCycle += getDelayOfAtomic(req.aType);
++                // Any update request other than MOV will access the cache twice.
++                // one to read, one to write updated value
++                respCycle += accLat;
++            } else {
++                update = true;
++                // info("\tAtomic Write Tag Hit on line %i but State Miss", lineId);
++            }
++        } else {
++            if (lineId != -1) {
++                if (cc->isExclusive(lineId)) {
++                    // info("\tRead or Plain Write Hit on line %i", lineId);
++                    hit = true;
++                } else {
++                    // info("\tRead or Plain Write Tag Hit on line %i but State Miss", lineId);
++                }
++            } else {
++                update = true;
++                // info("\tAtomic Write Miss.");
++            }
          }
 
          uint64_t getDoneCycle = respCycle;
+-        respCycle = cc->processAccess(req, lineId, respCycle, &getDoneCycle);
++        if (req.type == PUTA) {
++            // Latency not in critical path
++            cc->processAccess(req, lineId, respCycle, &getDoneCycle);
++        } else {
++            respCycle = cc->processAccess(req, lineId, respCycle, &getDoneCycle);
++        }
+
+         if (evRec->hasRecord()) accessRecord = evRec->popRecord();
+
+         // At this point we have all the info we need to hammer out the timing record
+         TimingRecord tr = {req.lineAddr << lineBits, req.cycle, respCycle, req.type, nullptr, nullptr}; //note the end event is the response, not the wback
+
+-        if (getDoneCycle - req.cycle == accLat) {
++        // Tie two events to an optional timing record
++        // TODO: Promote to evRec if this is more generally useful
++        auto connect = [&, evRec](const TimingRecord* r, TimingEvent* startEv, TimingEvent* endEv, uint64_t startCycle, uint64_t endCycle) {
++            assert_msg(startCycle <= endCycle, "start > end? %ld %ld", startCycle, endCycle);
++            if (r) {
++                assert_msg(startCycle <= r->reqCycle, "%s: %ld / %ld", name.c_str(), startCycle, r->reqCycle);
++                assert_msg(r->respCycle <= endCycle, "%s: %ld %ld %ld %ld", name.c_str(), startCycle, r->reqCycle, r->respCycle, endCycle);
++                uint64_t upLat = r->reqCycle - startCycle;
++                uint64_t downLat = endCycle - r->respCycle;
++
++                if (upLat) {
++                    DelayEvent* dUp = new (evRec) DelayEvent(upLat);
++                    dUp->setMinStartCycle(startCycle);
++                    startEv->addChild(dUp, evRec)->addChild(r->startEvent, evRec);
++                } else {
++                    startEv->addChild(r->startEvent, evRec);
++                }
++
++                if (downLat) {
++                    DelayEvent* dDown = new (evRec) DelayEvent(downLat);
++                    dDown->setMinStartCycle(r->respCycle);
++                    r->endEvent->addChild(dDown, evRec)->addChild(endEv, evRec);
++                } else {
++                    r->endEvent->addChild(endEv, evRec);
++                }
++            } else {
++                if (startCycle == endCycle) {
++                    startEv->addChild(endEv, evRec);
++                } else {
++                    DelayEvent* dEv = new (evRec) DelayEvent(endCycle - startCycle);
++                    dEv->setMinStartCycle(startCycle);
++                    startEv->addChild(dEv, evRec)->addChild(endEv, evRec);
++                }
++            }
++        };
++
++        if (hit) {
+             // Hit
+             assert(!writebackRecord.isValid());
+             assert(!accessRecord.isValid());
+@@ -160,6 +244,24 @@ uint64_t TimingCache::access(MemReq& req) {
+             HitEvent* ev = new (evRec) HitEvent(this, hitLat, domain);
+             ev->setMinStartCycle(req.cycle);
+             tr.startEvent = tr.endEvent = ev;
++        } else if (update) {
++            // Update
++            assert(!writebackRecord.isValid());
++            assert(accessRecord.isValid());
++            uint64_t updateLat = respCycle - req.cycle;
++            UpdateEvent* ev = new (evRec) UpdateEvent(this, updateLat, domain);
++            ev->setMinStartCycle(req.cycle);
++            tr.startEvent = tr.endEvent = ev;
++            // info("%s Update Response: %lu, %s", name.c_str(), req.addr, AccessTypeName(req.type));
++            assert(accessRecord.reqCycle >= (req.cycle + updateLat));
++            uint64_t upLat = accessRecord.reqCycle - (req.cycle + updateLat);
++            if (upLat) {
++                DelayEvent* dUp = new (evRec) DelayEvent(upLat);
++                dUp->setMinStartCycle(req.cycle + updateLat);
++                ev->addChild(dUp, evRec)->addChild(accessRecord.startEvent, evRec);
++            } else {
++                ev->addChild(accessRecord.startEvent, evRec);
++            }
+         } else {
+             assert_msg(getDoneCycle == respCycle, "gdc %ld rc %ld", getDoneCycle, respCycle);
+
+@@ -174,48 +276,14 @@ uint64_t TimingCache::access(MemReq& req) {
+             mre->setMinStartCycle(getDoneCycle);
+             mwe->setMinStartCycle(MAX(evDoneCycle, getDoneCycle));
+
+-            // Tie two events to an optional timing record
+-            // TODO: Promote to evRec if this is more generally useful
+-            auto connect = [evRec](const TimingRecord* r, TimingEvent* startEv, TimingEvent* endEv, uint64_t startCycle, uint64_t endCycle) {
+-                assert_msg(startCycle <= endCycle, "start > end? %ld %ld", startCycle, endCycle);
+-                if (r) {
+-                    assert_msg(startCycle <= r->reqCycle, "%ld / %ld", startCycle, r->reqCycle);
+-                    assert_msg(r->respCycle <= endCycle, "%ld %ld %ld %ld", startCycle, r->reqCycle, r->respCycle, endCycle);
+-                    uint64_t upLat = r->reqCycle - startCycle;
+-                    uint64_t downLat = endCycle - r->respCycle;
+-
+-                    if (upLat) {
+-                        DelayEvent* dUp = new (evRec) DelayEvent(upLat);
+-                        dUp->setMinStartCycle(startCycle);
+-                        startEv->addChild(dUp, evRec)->addChild(r->startEvent, evRec);
+-                    } else {
+-                        startEv->addChild(r->startEvent, evRec);
+-                    }
+-
+-                    if (downLat) {
+-                        DelayEvent* dDown = new (evRec) DelayEvent(downLat);
+-                        dDown->setMinStartCycle(r->respCycle);
+-                        r->endEvent->addChild(dDown, evRec)->addChild(endEv, evRec);
+-                    } else {
+-                        r->endEvent->addChild(endEv, evRec);
+-                    }
+-                } else {
+-                    if (startCycle == endCycle) {
+-                        startEv->addChild(endEv, evRec);
+-                    } else {
+-                        DelayEvent* dEv = new (evRec) DelayEvent(endCycle - startCycle);
+-                        dEv->setMinStartCycle(startCycle);
+-                        startEv->addChild(dEv, evRec)->addChild(endEv, evRec);
+-                    }
+-                }
+-            };
+-
+             // Get path
++            // info("%s Miss Response: %lu, %s", name.c_str(), req.addr, AccessTypeName(req.type));
+             connect(accessRecord.isValid()? &accessRecord : nullptr, mse, mre, req.cycle + accLat, getDoneCycle);
+             mre->addChild(mwe, evRec);
+
+             // Eviction path
+             if (evDoneCycle) {
++                // info("%s Evict: %lu, %s", name.c_str(), req.addr, AccessTypeName(req.type));
+                 connect(writebackRecord.isValid()? &writebackRecord : nullptr, mse, mwe, req.cycle + accLat, evDoneCycle);
+             }
+
+@@ -307,6 +375,18 @@ void TimingCache::simulateHit(HitEvent* ev, uint64_t cycle) {
+     }
+ }
+
++void TimingCache::simulateUpdate(UpdateEvent* ev, uint64_t cycle) {
++    if (activeMisses < numMSHRs) {
++        uint64_t lookupCycle = highPrioAccess(cycle);
++        profUpdateLat.inc(lookupCycle-cycle);
++        ev->done(lookupCycle);  // postDelay includes accLat + invalLat
++    } else {
++        // queue
++        ev->hold();
++        pendingQueue.push_back(ev);
++    }
++}
++
+ void TimingCache::simulateMissStart(MissStartEvent* ev, uint64_t cycle) {
+     if (activeMisses < numMSHRs) {
+         activeMisses++;
+diff --git a/src/timing_cache.h b/src/timing_cache.h
+index 3b04c4e..e6dfef8 100644
+--- a/src/timing_cache.h
++++ b/src/timing_cache.h
+@@ -30,6 +30,7 @@
+ #include "cache.h"
+
+ class HitEvent;
++class UpdateEvent;
+ class MissStartEvent;
+ class MissResponseEvent;
+ class MissWritebackEvent;
+@@ -44,7 +45,7 @@ class TimingCache : public Cache {
+
+         // Stats
+         CycleBreakdownStat profOccHist;
+-        Counter profHitLat, profMissRespLat, profMissLat;
++        Counter profHitLat, profMissRespLat, profMissLat, profUpdateLat;
+
+         uint32_t domain;
+
+@@ -63,6 +64,7 @@ class TimingCache : public Cache {
+         uint64_t access(MemReq& req);
+
+         void simulateHit(HitEvent* ev, uint64_t cycle);
++        void simulateUpdate(UpdateEvent* ev, uint64_t cycle);
+         void simulateMissStart(MissStartEvent* ev, uint64_t cycle);
+         void simulateMissResponse(MissResponseEvent* ev, uint64_t cycle, MissStartEvent* mse);
+         void simulateMissWriteback(MissWritebackEvent* ev, uint64_t cycle, MissStartEvent* mse);
 diff --git a/src/timing_core.cpp b/src/timing_core.cpp
-index 77b236b..336b60a 100644
+index 77b236b..9b8ad8e 100644
 --- a/src/timing_core.cpp
 +++ b/src/timing_core.cpp
-@@ -83,9 +83,9 @@ void TimingCore::loadAndRecord(Address addr) {
+@@ -77,15 +77,15 @@ void TimingCore::leave() {
+     cRec.notifyLeave(curCycle);
+ }
+
+-void TimingCore::loadAndRecord(Address addr) {
++void TimingCore::loadAndRecord(Address addr, bool ignore) {
+     uint64_t startCycle = curCycle;
+-    curCycle = l1d->load(addr, curCycle);
++    curCycle = l1d->load(addr, curCycle, ignore);
      cRec.record(startCycle);
  }
 
@@ -1234,8 +1932,23 @@ index 77b236b..336b60a 100644
      cRec.record(startCycle);
  }
 
-@@ -110,8 +110,8 @@ void TimingCore::LoadAndRecordFunc(THREADID tid, ADDRINT addr) {
-     static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr);
+@@ -96,7 +96,7 @@ void TimingCore::bblAndRecord(Address bblAddr, BblInfo* bblInfo) {
+     Address endBblAddr = bblAddr + bblInfo->bytes;
+     for (Address fetchAddr = bblAddr; fetchAddr < endBblAddr; fetchAddr+=(1 << lineBits)) {
+         uint64_t startCycle = curCycle;
+-        curCycle = l1i->load(fetchAddr, curCycle);
++        curCycle = l1i->load(fetchAddr, curCycle, false);
+         cRec.record(startCycle);
+     }
+ }
+@@ -106,12 +106,12 @@ InstrFuncPtrs TimingCore::GetFuncPtrs() {
+     return {LoadAndRecordFunc, StoreAndRecordFunc, BblAndRecordFunc, BranchFunc, PredLoadAndRecordFunc, PredStoreAndRecordFunc, FPTR_ANALYSIS, {0}};
+ }
+
+-void TimingCore::LoadAndRecordFunc(THREADID tid, ADDRINT addr) {
+-    static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr);
++void TimingCore::LoadAndRecordFunc(THREADID tid, ADDRINT addr, BOOL ignore) {
++    static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr, ignore);
  }
 
 -void TimingCore::StoreAndRecordFunc(THREADID tid, ADDRINT addr) {
@@ -1245,8 +1958,14 @@ index 77b236b..336b60a 100644
  }
 
  void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
-@@ -130,7 +130,7 @@ void TimingCore::PredLoadAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred) {
-     if (pred) static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr);
+@@ -126,11 +126,11 @@ void TimingCore::BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInf
+     }
+ }
+
+-void TimingCore::PredLoadAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred) {
+-    if (pred) static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr);
++void TimingCore::PredLoadAndRecordFunc(THREADID tid, ADDRINT addr, BOOL ignore, BOOL pred) {
++    if (pred) static_cast<TimingCore*>(cores[tid])->loadAndRecord(addr, ignore);
  }
 
 -void TimingCore::PredStoreAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred) {
@@ -1256,30 +1975,34 @@ index 77b236b..336b60a 100644
  }
 
 diff --git a/src/timing_core.h b/src/timing_core.h
-index 79b54d8..7826723 100644
+index 79b54d8..6821b8f 100644
 --- a/src/timing_core.h
 +++ b/src/timing_core.h
-@@ -67,15 +67,15 @@ class TimingCore : public Core {
+@@ -66,16 +66,16 @@ class TimingCore : public Core {
+         void cSimEnd() {curCycle = cRec.cSimEnd(curCycle);}
 
      private:
-         inline void loadAndRecord(Address addr);
+-        inline void loadAndRecord(Address addr);
 -        inline void storeAndRecord(Address addr);
++        inline void loadAndRecord(Address addr, bool ignore);
 +        inline void storeAndRecord(Address addr, AtomType aType);
          inline void bblAndRecord(Address bblAddr, BblInfo* bblInstrs);
          inline void record(uint64_t startCycle);
 
-         static void LoadAndRecordFunc(THREADID tid, ADDRINT addr);
+-        static void LoadAndRecordFunc(THREADID tid, ADDRINT addr);
 -        static void StoreAndRecordFunc(THREADID tid, ADDRINT addr);
++        static void LoadAndRecordFunc(THREADID tid, ADDRINT addr, BOOL ignore);
 +        static void StoreAndRecordFunc(THREADID tid, ADDRINT addr, AtomType aType);
          static void BblAndRecordFunc(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo);
-         static void PredLoadAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred);
+-        static void PredLoadAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred);
 -        static void PredStoreAndRecordFunc(THREADID tid, ADDRINT addr, BOOL pred);
++        static void PredLoadAndRecordFunc(THREADID tid, ADDRINT addr, BOOL ignore, BOOL pred);
 +        static void PredStoreAndRecordFunc(THREADID tid, ADDRINT addr, AtomType aType, BOOL pred);
 
          static void BranchFunc(THREADID, ADDRINT, BOOL, ADDRINT, ADDRINT) {}
  } ATTR_LINE_ALIGNED;
 diff --git a/src/trace_driver.cpp b/src/trace_driver.cpp
-index 6c312bd..3aa5ebb 100644
+index 6c312bd..1d9bcff 100644
 --- a/src/trace_driver.cpp
 +++ b/src/trace_driver.cpp
 @@ -133,7 +133,7 @@ void TraceDriver::executeAccess(AccessRecord acc) {
@@ -1287,7 +2010,7 @@ index 6c312bd..3aa5ebb 100644
                  std::unordered_map<Address, MESIState>::iterator it = cStore.find(acc.lineAddr);
                  if (it == cStore.end()) return; //we don't currently have this line, skip
 -                MemReq req = {acc.lineAddr, acc.type, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId};
-+                MemReq req = {acc.lineAddr, acc.type, NONE, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId};
++                MemReq req = {acc.lineAddr, acc.lineAddr << lineBits, acc.type, NONE, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId};
                  lat = parent->access(req) - acc.reqCycle; //note that PUT latency does not affect driver latency
                  assert(it->second == I);
                  cStore.erase(it);
@@ -1296,7 +2019,7 @@ index 6c312bd..3aa5ebb 100644
                      if (!((it->second == S) && (acc.type == GETX))) { //we have the line, and it's not an upgrade miss, we can't replay this access directly
                          if (playAllGets) { //issue a PUT
 -                            MemReq req = {acc.lineAddr, (it->second == M)? PUTX : PUTS, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId};
-+                            MemReq req = {acc.lineAddr, (it->second == M)? PUTX : PUTS, NONE, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId};
++                            MemReq req = {acc.lineAddr, acc.lineAddr << lineBits, (it->second == M)? PUTX : PUTS, NONE, acc.childId, &it->second, acc.reqCycle, nullptr, it->second, acc.childId};
                              parent->access(req);
                              assert(it->second == I);
                          } else {
@@ -1305,46 +2028,302 @@ index 6c312bd..3aa5ebb 100644
                      }
                  }
 -                MemReq req = {acc.lineAddr, acc.type, acc.childId, &state, acc.reqCycle, nullptr, state, acc.childId};
-+                MemReq req = {acc.lineAddr, acc.type, NONE, acc.childId, &state, acc.reqCycle, nullptr, state, acc.childId};
++                MemReq req = {acc.lineAddr, acc.lineAddr << lineBits, acc.type, NONE, acc.childId, &state, acc.reqCycle, nullptr, state, acc.childId};
                  uint64_t respCycle = parent->access(req);
                  lat = respCycle - acc.reqCycle;
                  children[acc.childId].profLat.inc(lat);
 diff --git a/src/zsim.cpp b/src/zsim.cpp
-index b62ed58..c1a5819 100644
+index b62ed58..0e2c71d 100644
 --- a/src/zsim.cpp
 +++ b/src/zsim.cpp
-@@ -169,8 +169,8 @@ VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT addr) {
-     fPtrs[tid].loadPtr(tid, addr);
+@@ -165,12 +165,12 @@ VOID FFThread(VOID* arg);
+
+ InstrFuncPtrs fPtrs[MAX_THREADS] ATTR_LINE_ALIGNED; //minimize false sharing
+
+-VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT addr) {
+-    fPtrs[tid].loadPtr(tid, addr);
++VOID PIN_FAST_ANALYSIS_CALL IndirectLoadSingle(THREADID tid, ADDRINT addr, BOOL ignore) {
++    fPtrs[tid].loadPtr(tid, addr, ignore);
  }
 
 -VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT addr) {
 -    fPtrs[tid].storePtr(tid, addr);
-+VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT addr, AtomType aType = NONE) {
++VOID PIN_FAST_ANALYSIS_CALL IndirectStoreSingle(THREADID tid, ADDRINT addr, AtomType aType) {
 +    fPtrs[tid].storePtr(tid, addr, aType);
  }
 
  VOID PIN_FAST_ANALYSIS_CALL IndirectBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
-@@ -185,8 +185,8 @@ VOID PIN_FAST_ANALYSIS_CALL IndirectPredLoadSingle(THREADID tid, ADDRINT addr, B
-     fPtrs[tid].predLoadPtr(tid, addr, pred);
+@@ -181,12 +181,12 @@ VOID PIN_FAST_ANALYSIS_CALL IndirectRecordBranch(THREADID tid, ADDRINT branchPc,
+     fPtrs[tid].branchPtr(tid, branchPc, taken, takenNpc, notTakenNpc);
+ }
+
+-VOID PIN_FAST_ANALYSIS_CALL IndirectPredLoadSingle(THREADID tid, ADDRINT addr, BOOL pred) {
+-    fPtrs[tid].predLoadPtr(tid, addr, pred);
++VOID PIN_FAST_ANALYSIS_CALL IndirectPredLoadSingle(THREADID tid, ADDRINT addr, BOOL ignore, BOOL pred) {
++    fPtrs[tid].predLoadPtr(tid, addr, ignore, pred);
  }
 
 -VOID PIN_FAST_ANALYSIS_CALL IndirectPredStoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
 -    fPtrs[tid].predStorePtr(tid, addr, pred);
-+VOID PIN_FAST_ANALYSIS_CALL IndirectPredStoreSingle(THREADID tid, ADDRINT addr, BOOL pred, AtomType aType = NONE) {
++VOID PIN_FAST_ANALYSIS_CALL IndirectPredStoreSingle(THREADID tid, ADDRINT addr, AtomType aType, BOOL pred) {
 +    fPtrs[tid].predStorePtr(tid, addr, aType, pred);
  }
 
 
+@@ -207,14 +207,14 @@ void Join(uint32_t tid) {
+     fPtrs[tid] = cores[tid]->GetFuncPtrs(); //back to normal pointers
+ }
+
+-VOID JoinAndLoadSingle(THREADID tid, ADDRINT addr) {
++VOID JoinAndLoadSingle(THREADID tid, ADDRINT addr, BOOL ignore) {
+     Join(tid);
+-    fPtrs[tid].loadPtr(tid, addr);
++    fPtrs[tid].loadPtr(tid, addr, ignore);
+ }
+
+-VOID JoinAndStoreSingle(THREADID tid, ADDRINT addr) {
++VOID JoinAndStoreSingle(THREADID tid, ADDRINT addr, AtomType aType) {
+     Join(tid);
+-    fPtrs[tid].storePtr(tid, addr);
++    fPtrs[tid].storePtr(tid, addr, aType);
+ }
+
+ VOID JoinAndBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+@@ -227,21 +227,23 @@ VOID JoinAndRecordBranch(THREADID tid, ADDRINT branchPc, BOOL taken, ADDRINT tak
+     fPtrs[tid].branchPtr(tid, branchPc, taken, takenNpc, notTakenNpc);
+ }
+
+-VOID JoinAndPredLoadSingle(THREADID tid, ADDRINT addr, BOOL pred) {
++VOID JoinAndPredLoadSingle(THREADID tid, ADDRINT addr, BOOL ignore, BOOL pred) {
+     Join(tid);
+-    fPtrs[tid].predLoadPtr(tid, addr, pred);
++    fPtrs[tid].predLoadPtr(tid, addr, ignore, pred);
+ }
+
+-VOID JoinAndPredStoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {
++VOID JoinAndPredStoreSingle(THREADID tid, ADDRINT addr, AtomType aType, BOOL pred) {
+     Join(tid);
+-    fPtrs[tid].predStorePtr(tid, addr, pred);
++    fPtrs[tid].predStorePtr(tid, addr, aType, pred);
+ }
+
+ // NOP variants: Do nothing
+-VOID NOPLoadStoreSingle(THREADID tid, ADDRINT addr) {}
++VOID NOPLoadSingle(THREADID tid, ADDRINT addr, BOOL ignore) {}
++VOID NOPStoreSingle(THREADID tid, ADDRINT addr, AtomType aType) {}
+ VOID NOPBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {}
+ VOID NOPRecordBranch(THREADID tid, ADDRINT addr, BOOL taken, ADDRINT takenNpc, ADDRINT notTakenNpc) {}
+-VOID NOPPredLoadStoreSingle(THREADID tid, ADDRINT addr, BOOL pred) {}
++VOID NOPPredLoadSingle(THREADID tid, ADDRINT addr, BOOL ignore, BOOL pred) {}
++VOID NOPPredStoreSingle(THREADID tid, ADDRINT addr, AtomType aType, BOOL pred) {}
+
+ // FF is basically NOP except for basic blocks
+ VOID FFBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+@@ -364,12 +366,12 @@ VOID FFIEntryBasicBlock(THREADID tid, ADDRINT bblAddr, BblInfo* bblInfo) {
+
+ // Non-analysis pointer vars
+ static const InstrFuncPtrs joinPtrs = {JoinAndLoadSingle, JoinAndStoreSingle, JoinAndBasicBlock, JoinAndRecordBranch, JoinAndPredLoadSingle, JoinAndPredStoreSingle, FPTR_JOIN};
+-static const InstrFuncPtrs nopPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, FPTR_NOP};
+-static const InstrFuncPtrs retryPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, NOPBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, FPTR_RETRY};
+-static const InstrFuncPtrs ffPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, FFBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, FPTR_NOP};
++static const InstrFuncPtrs nopPtrs = {NOPLoadSingle, NOPStoreSingle, NOPBasicBlock, NOPRecordBranch, NOPPredLoadSingle, NOPPredStoreSingle, FPTR_NOP};
++static const InstrFuncPtrs retryPtrs = {NOPLoadSingle, NOPStoreSingle, NOPBasicBlock, NOPRecordBranch, NOPPredLoadSingle, NOPPredStoreSingle, FPTR_RETRY};
++static const InstrFuncPtrs ffPtrs = {NOPLoadSingle, NOPStoreSingle, FFBasicBlock, NOPRecordBranch, NOPPredLoadSingle, NOPPredStoreSingle, FPTR_NOP};
+
+-static const InstrFuncPtrs ffiPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, FFIBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, FPTR_NOP};
+-static const InstrFuncPtrs ffiEntryPtrs = {NOPLoadStoreSingle, NOPLoadStoreSingle, FFIEntryBasicBlock, NOPRecordBranch, NOPPredLoadStoreSingle, NOPPredLoadStoreSingle, FPTR_NOP};
++static const InstrFuncPtrs ffiPtrs = {NOPLoadSingle, NOPStoreSingle, FFIBasicBlock, NOPRecordBranch, NOPPredLoadSingle, NOPPredStoreSingle, FPTR_NOP};
++static const InstrFuncPtrs ffiEntryPtrs = {NOPLoadSingle, NOPStoreSingle, FFIEntryBasicBlock, NOPRecordBranch, NOPPredLoadSingle, NOPPredStoreSingle, FPTR_NOP};
+
+ static const InstrFuncPtrs& GetFFPtrs() {
+     return ffiEnabled? (ffiNFF? ffiEntryPtrs : ffiPtrs) : ffPtrs;
+@@ -539,34 +541,157 @@ VOID Instruction(INS ins) {
+         AFUNPTR PredLoadFuncPtr = (AFUNPTR) IndirectPredLoadSingle;
+         AFUNPTR PredStoreFuncPtr = (AFUNPTR) IndirectPredStoreSingle;
+
+-        if (INS_IsMemoryRead(ins)) {
++        if (unlikely(INS_Prev(ins) != INS_Invalid() && INS_Opcode(INS_Prev(ins)) == XED_ICLASS_NOP && INS_Disassemble(INS_Prev(ins)) == "nop dword ptr [rax+0x221100ff], eax")) {
++            // Those are single instructions
++            // Those instructions must have a memory operand in the
++            // destination. The source must be a register or immediate.
++            switch (INS_Opcode(ins)) {
++                case XED_ICLASS_MOV:
++                    // MOV is the only instruction that writes to the operand
++                    // without reading it first.
++                    info("UPDATE: Found MOV");
++                    assert(INS_IsMemoryWrite(ins) && !INS_IsMemoryRead(ins));
++                    if (!INS_IsPredicated(ins)) {
++                        INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::MOV, IARG_END);
++                    } else {
++                        INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::MOV, IARG_EXECUTING, IARG_END);
++                    }
++                    break;
++                case XED_ICLASS_INC:
++                case XED_ICLASS_DEC:
++                    // INC and DEC are emulated as ADD.
++                    // Those have one read/write memory location and no read
++                    // reg or imm
++                    info("UPDATE: Found INC/DEC");
++                    assert(INS_IsMemoryRead(ins) && INS_IsMemoryWrite(ins));
++                    if (!INS_IsPredicated(ins)) {
++                        INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::IADDI, IARG_END);
++                    } else {
++                        INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::IADDI, IARG_EXECUTING, IARG_END);
++                    }
++                    break;
++                case XED_ICLASS_AND:
++                    // AND has one read/write memory operand, plus one read
++                    // reg or imm
++                    info("UPDATE: Found AND");
++                    assert(INS_IsMemoryRead(ins) && INS_IsMemoryWrite(ins));
++                    if (!INS_IsPredicated(ins)) {
++                        INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::ANDI, IARG_END);
++                    } else {
++                        INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::ANDI, IARG_EXECUTING, IARG_END);
++                    }
++                    break;
++                case XED_ICLASS_OR:
++                    // Like AND
++                    info("UPDATE: Found OR");
++                    assert(INS_IsMemoryRead(ins) && INS_IsMemoryWrite(ins));
++                    if (!INS_IsPredicated(ins)) {
++                        INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::ORI, IARG_END);
++                    } else {
++                        INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::ORI, IARG_EXECUTING, IARG_END);
++                    }
++                    break;
++                case XED_ICLASS_XOR:
++                    // Like AND
++                    info("UPDATE: Found XOR");
++                    assert(INS_IsMemoryRead(ins) && INS_IsMemoryWrite(ins));
++                    if (!INS_IsPredicated(ins)) {
++                        INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::XORI, IARG_END);
++                    } else {
++                        INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::XORI, IARG_EXECUTING, IARG_END);
++                    }
++                    break;
++                case XED_ICLASS_ADD:
++                case XED_ICLASS_SUB:
++                    // Like AND
++                    info("UPDATE: Found ADD/SUB");
++                    assert(INS_IsMemoryRead(ins) && INS_IsMemoryWrite(ins));
++                    if (!INS_IsPredicated(ins)) {
++                        INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::IADDI, IARG_END);
++                    } else {
++                        INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::IADDI, IARG_EXECUTING, IARG_END);
++                    }
++                    break;
++                default:
++                    panic("Unknown update instruction: %s", INS_Disassemble(ins).c_str());
++            }
++        // Those are more complex forms of instructions. Because stupid x86
++        // doesn't have MIN and MAX instructions except in Packed SSE form.
++        // these are actually 5 instructions per group. 2 moves to populate 2
++        // xmm regs, then trigger, then min/max, then move from xmm to mem
++        } else if (unlikely(INS_Next(ins) != INS_Invalid() && INS_Opcode(INS_Next(ins)) == XED_ICLASS_NOP && INS_Disassemble(INS_Next(ins)) == "nop dword ptr [rax+0x331100ff], eax")) {
++            // This instruction is the mov before trigger. it moves the memory
++            // operand into an xmm reg. we don't want to simulate this memory
++            // access.
++            // Unfortunately, if we just ignore this access here, the decoder
++            // still considers it, so causes failure within the OOO core. So
++            // instead we just pass it as a load with an ignore flag, which
++            // will be handled in the memory hierarchy.
++            assert(INS_Opcode(ins) == XED_ICLASS_MOVD && INS_IsMemoryRead(ins) && !INS_IsMemoryWrite(ins));
+             if (!INS_IsPredicated(ins)) {
+-                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_END);
++                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_BOOL, true, IARG_END);
+             } else {
+-                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_EXECUTING, IARG_END);
++                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_BOOL, true, IARG_EXECUTING, IARG_END);
++            }
++        } else if (unlikely(INS_Prev(ins) != INS_Invalid() && INS_Opcode(INS_Prev(ins)) == XED_ICLASS_NOP && INS_Disassemble(INS_Prev(ins)) == "nop dword ptr [rax+0x331100ff], eax")) {
++            // This is the actual MIN/MAX instruction after the trigger.
++            // Do nothing.
++            assert(INS_Opcode(ins) == XED_ICLASS_PMINSD || INS_Opcode(ins) == XED_ICLASS_PMINUD || INS_Opcode(ins) == XED_ICLASS_PMAXSD || INS_Opcode(ins) == XED_ICLASS_PMAXUD);
++        } else if (unlikely(INS_Prev(ins) != INS_Invalid() && INS_Prev(INS_Prev(ins)) != INS_Invalid() && INS_Opcode(INS_Prev(INS_Prev(ins))) == XED_ICLASS_NOP && INS_Disassemble(INS_Prev(INS_Prev(ins))) == "nop dword ptr [rax+0x331100ff], eax")) {
++            // This is the write MOVD following the MIN or MAX op.
++            assert(INS_Opcode(ins) == XED_ICLASS_MOVD && !INS_IsMemoryRead(ins) && INS_IsMemoryWrite(ins));
++            switch (INS_Opcode(INS_Prev(ins))) {
++                case XED_ICLASS_PMINSD:
++                case XED_ICLASS_PMINUD:
++                    info("UPDATE: Found MIN");
++                    if (!INS_IsPredicated(ins)) {
++                        INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::IMINI, IARG_END);
++                    } else {
++                        INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::IMINI, IARG_EXECUTING, IARG_END);
++                    }
++                    break;
++                case XED_ICLASS_PMAXSD:
++                case XED_ICLASS_PMAXUD:
++                    info("UPDATE: Found MAX");
++                    if (!INS_IsPredicated(ins)) {
++                        INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::IMAXI, IARG_END);
++                    } else {
++                        INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::IMAXI, IARG_EXECUTING, IARG_END);
++                    }
++                    break;
++                default:
++                    panic("Unknown update instruction: %s", INS_Disassemble(INS_Prev(ins)).c_str());
++            }
++        } else {
++            if (INS_IsMemoryRead(ins)) {
++                if (!INS_IsPredicated(ins)) {
++                    INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_BOOL, false, IARG_END);
++                } else {
++                    INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD_EA, IARG_BOOL, false, IARG_EXECUTING, IARG_END);
++                }
+             }
+-        }
+
+-        if (INS_HasMemoryRead2(ins)) {
+-            if (!INS_IsPredicated(ins)) {
+-                INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_END);
+-            } else {
+-                INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_EXECUTING, IARG_END);
++            if (INS_HasMemoryRead2(ins)) {
++                if (!INS_IsPredicated(ins)) {
++                    INS_InsertCall(ins, IPOINT_BEFORE, LoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_BOOL, false, IARG_END);
++                } else {
++                    INS_InsertCall(ins, IPOINT_BEFORE, PredLoadFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYREAD2_EA, IARG_BOOL, false, IARG_EXECUTING, IARG_END);
++                }
+             }
+-        }
+
+-        if (INS_IsMemoryWrite(ins)) {
+-            if (!INS_IsPredicated(ins)) {
+-                INS_InsertCall(ins, IPOINT_BEFORE,  StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_END);
+-            } else {
+-                INS_InsertCall(ins, IPOINT_BEFORE,  PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_EXECUTING, IARG_END);
++            if (INS_IsMemoryWrite(ins)) {
++                if (!INS_IsPredicated(ins)) {
++                    INS_InsertCall(ins, IPOINT_BEFORE, StoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::NONE, IARG_END);
++                } else {
++                    INS_InsertCall(ins, IPOINT_BEFORE, PredStoreFuncPtr, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID, IARG_MEMORYWRITE_EA, IARG_UINT32, AtomType::NONE, IARG_EXECUTING, IARG_END);
++                }
+             }
+-        }
+
+-        // Instrument only conditional branches
+-        if (INS_Category(ins) == XED_CATEGORY_COND_BR) {
+-            INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) IndirectRecordBranch, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
+-                    IARG_INST_PTR, IARG_BRANCH_TAKEN, IARG_BRANCH_TARGET_ADDR, IARG_FALLTHROUGH_ADDR, IARG_END);
++            // Instrument only conditional branches
++            if (INS_Category(ins) == XED_CATEGORY_COND_BR) {
++                INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR) IndirectRecordBranch, IARG_FAST_ANALYSIS_CALL, IARG_THREAD_ID,
++                        IARG_INST_PTR, IARG_BRANCH_TAKEN, IARG_BRANCH_TARGET_ADDR, IARG_FALLTHROUGH_ADDR, IARG_END);
++            }
+         }
+     }
+
 diff --git a/src/zsim.h b/src/zsim.h
-index bba2836..5cc2ae9 100644
+index bba2836..9706b42 100644
 --- a/src/zsim.h
 +++ b/src/zsim.h
-@@ -180,6 +180,8 @@ struct GlobSimInfo {
+@@ -180,6 +180,7 @@ struct GlobSimInfo {
 
      // Trace-driven simulation (no cores)
      bool traceDriven;
 +    bool allowUpdate;
-+    bool allowUpdateCache;
      TraceDriver* traceDriver;
  };
 

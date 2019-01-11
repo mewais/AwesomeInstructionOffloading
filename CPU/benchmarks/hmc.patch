@@ -1,0 +1,171 @@
+diff --git a/apps/apsp/run.cfg b/apps/apsp/run.cfg
+index 0cea5da..10d4e3e 100644
+--- a/apps/apsp/run.cfg
++++ b/apps/apsp/run.cfg
+@@ -60,9 +60,11 @@ sys = {
+     };
+
+     mem = {
+-        type = "DDR";
+-        controllers = 1;
+-        tech = "DDR3-1066-CL8";
++        type = "CasHMC";
++        simIni = "../../../../simulator/zsim/CasHMC/ConfigSim.ini"
++        dramIni = "../../../../simulator/zsim/CasHMC/ConfigDRAM.ini"
++        queueSize = 16;
++        burstSize = 16;
+     };
+ };
+
+diff --git a/apps/bc/run.cfg b/apps/bc/run.cfg
+index 0327b2c..ab1b63d 100644
+--- a/apps/bc/run.cfg
++++ b/apps/bc/run.cfg
+@@ -60,9 +60,11 @@ sys = {
+     };
+
+     mem = {
+-        type = "DDR";
+-        controllers = 1;
+-        tech = "DDR3-1066-CL8";
++        type = "CasHMC";
++        simIni = "../../../../simulator/zsim/CasHMC/ConfigSim.ini"
++        dramIni = "../../../../simulator/zsim/CasHMC/ConfigDRAM.ini"
++        queueSize = 16;
++        burstSize = 16;
+     };
+ };
+
+diff --git a/apps/bfs/run.cfg b/apps/bfs/run.cfg
+index 2bd4831..c9ea489 100644
+--- a/apps/bfs/run.cfg
++++ b/apps/bfs/run.cfg
+@@ -60,9 +60,11 @@ sys = {
+     };
+
+     mem = {
+-        type = "DDR";
+-        controllers = 1;
+-        tech = "DDR3-1066-CL8";
++        type = "CasHMC";
++        simIni = "../../../../simulator/zsim/CasHMC/ConfigSim.ini"
++        dramIni = "../../../../simulator/zsim/CasHMC/ConfigDRAM.ini"
++        queueSize = 16;
++        burstSize = 16;
+     };
+ };
+
+diff --git a/apps/community/run.cfg b/apps/community/run.cfg
+index 38e4568..a771775 100644
+--- a/apps/community/run.cfg
++++ b/apps/community/run.cfg
+@@ -60,9 +60,11 @@ sys = {
+     };
+
+     mem = {
+-        type = "DDR";
+-        controllers = 1;
+-        tech = "DDR3-1066-CL8";
++        type = "CasHMC";
++        simIni = "../../../../simulator/zsim/CasHMC/ConfigSim.ini"
++        dramIni = "../../../../simulator/zsim/CasHMC/ConfigDRAM.ini"
++        queueSize = 16;
++        burstSize = 16;
+     };
+ };
+
+diff --git a/apps/connected_components/run.cfg b/apps/connected_components/run.cfg
+index dd064b8..bc18d26 100644
+--- a/apps/connected_components/run.cfg
++++ b/apps/connected_components/run.cfg
+@@ -60,9 +60,11 @@ sys = {
+     };
+
+     mem = {
+-        type = "DDR";
+-        controllers = 1;
+-        tech = "DDR3-1066-CL8";
++        type = "CasHMC";
++        simIni = "../../../../simulator/zsim/CasHMC/ConfigSim.ini"
++        dramIni = "../../../../simulator/zsim/CasHMC/ConfigDRAM.ini"
++        queueSize = 16;
++        burstSize = 16;
+     };
+ };
+
+diff --git a/apps/dfs/run.cfg b/apps/dfs/run.cfg
+index b9321cc..4ec5ebd 100644
+--- a/apps/dfs/run.cfg
++++ b/apps/dfs/run.cfg
+@@ -60,9 +60,11 @@ sys = {
+     };
+
+     mem = {
+-        type = "DDR";
+-        controllers = 1;
+-        tech = "DDR3-1066-CL8";
++        type = "CasHMC";
++        simIni = "../../../../simulator/zsim/CasHMC/ConfigSim.ini"
++        dramIni = "../../../../simulator/zsim/CasHMC/ConfigDRAM.ini"
++        queueSize = 16;
++        burstSize = 16;
+     };
+ };
+
+diff --git a/apps/pagerank/run.cfg b/apps/pagerank/run.cfg
+index ccedd40..69b34c4 100644
+--- a/apps/pagerank/run.cfg
++++ b/apps/pagerank/run.cfg
+@@ -60,9 +60,11 @@ sys = {
+     };
+
+     mem = {
+-        type = "DDR";
+-        controllers = 1;
+-        tech = "DDR3-1066-CL8";
++        type = "CasHMC";
++        simIni = "../../../../simulator/zsim/CasHMC/ConfigSim.ini"
++        dramIni = "../../../../simulator/zsim/CasHMC/ConfigDRAM.ini"
++        queueSize = 16;
++        burstSize = 16;
+     };
+ };
+
+diff --git a/apps/sssp/run.cfg b/apps/sssp/run.cfg
+index e94f750..7719411 100644
+--- a/apps/sssp/run.cfg
++++ b/apps/sssp/run.cfg
+@@ -60,9 +60,11 @@ sys = {
+     };
+
+     mem = {
+-        type = "DDR";
+-        controllers = 1;
+-        tech = "DDR3-1066-CL8";
++        type = "CasHMC";
++        simIni = "../../../../simulator/zsim/CasHMC/ConfigSim.ini"
++        dramIni = "../../../../simulator/zsim/CasHMC/ConfigDRAM.ini"
++        queueSize = 16;
++        burstSize = 16;
+     };
+ };
+
+diff --git a/apps/triangle_counting/run.cfg b/apps/triangle_counting/run.cfg
+index 0ddf875..f4016be 100644
+--- a/apps/triangle_counting/run.cfg
++++ b/apps/triangle_counting/run.cfg
+@@ -60,9 +60,11 @@ sys = {
+     };
+
+     mem = {
+-        type = "DDR";
+-        controllers = 1;
+-        tech = "DDR3-1066-CL8";
++        type = "CasHMC";
++        simIni = "../../../../simulator/zsim/CasHMC/ConfigSim.ini"
++        dramIni = "../../../../simulator/zsim/CasHMC/ConfigDRAM.ini"
++        queueSize = 16;
++        burstSize = 16;
+     };
+ };
+
